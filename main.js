@@ -3,6 +3,18 @@ const {toTelegram} = require('./telegram');
 const {toScreen} = require('./utils');
 const connection = require('./connection');
 const stocks = require('./data/stocks.json');
+const winston = require('winston');
+const moment = require('moment');
+
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.json(),
+  defaultMeta: {service: 'user-service'},
+  transports: [
+    new winston.transports.File({filename: 'error.log', level: 'error'}),
+    new winston.transports.File({filename: 'combined.log'}),
+  ],
+});
 
 const listOfInstrumentInfoSubscriptions = ['AMZN', 'PHOR'];
 
@@ -20,11 +32,17 @@ const handleSubscriptionInstrumentInfoMessage = async (data) => {
   const {figi} = data;
   const asset = activeInstrumentInfoSubscriptions.find(item => item.figi === figi)
   if (asset) data.ticker = asset.ticker;
+  const time = moment();
+  data.time = time.format();
   const text = JSON.stringify(data, null, 2);
   console.log('▼▼▼▼▼▼▼▼▼▼▼');
-  console.log(new Date());
+  console.log(time);
   toScreen(text);
   console.log('▲▲▲▲▲▲▲▲▲▲▲');
+  logger.log({
+    level: 'info',
+    message: text
+  });
   await toTelegram(text);
 }
 
@@ -32,10 +50,17 @@ const handleSubscriptionOrderBookMessage = async (data) => {
   const {figi} = data;
   const asset = activeOrderBookSubscriptions.find(item => item.figi === figi)
   if (asset) data.ticker = asset.ticker;
+  const time = moment();
+  data.time = time.format();
   console.log('▼▼▼▼▼▼▼▼▼▼▼');
-  console.log(new Date());
+  console.log(time);
   console.log(data);
   console.log('▲▲▲▲▲▲▲▲▲▲▲');
+
+  logger.log({
+    level: 'info',
+    message: JSON.stringify(data)
+  });
 }
 
 const runMain = () => {
