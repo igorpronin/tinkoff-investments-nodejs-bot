@@ -1,6 +1,5 @@
 require('dotenv').config();
 const chalk = require('chalk');
-const {sendMes} = require('./telegram');
 
 // level: 'w' | 'e'
 const toScreen = (message, level) => {
@@ -12,20 +11,11 @@ const toScreen = (message, level) => {
   console.log(mes);
 }
 
-const toTelegram = async (mes) => {
-  return await sendMes({
-    userID: process.env.TG_ADMIN_USER_ID,
-    mes,
-    disableLinkPreview: true
-  })
-}
-
 const debug = (mes) => {
   if (process.env.DEBUG === '1') console.log(mes);
 }
 
 module.exports = {
   debug,
-  toScreen,
-  toTelegram
+  toScreen
 }

@@ -50,6 +50,15 @@ const getPortfolio = async (connection) => {
   }
 }
 
+const getOrders = async (connection) => {
+  try {
+    return await connection.orders();
+  } catch (e) {
+    toScreen(errMes, 'e');
+    debug(e);
+  }
+}
+
 const saveStocks = async (stocks) => {
   try {
     const str = JSON.stringify(stocks, null, 2);
@@ -80,12 +89,24 @@ const savePortfolio = async (portfolio) => {
   }
 }
 
+const saveOrders = async (orders) => {
+  try {
+    const str = JSON.stringify(orders, null, 2);
+    if (str) await saveFile('data/orders.json', str);
+  } catch (e) {
+    toScreen(errMes, 'e');
+    debug(e);
+  }
+}
+
 module.exports = {
+  saveFile,
   getStocks,
   getAccounts,
   getPortfolio,
-  saveFile,
+  getOrders,
   saveStocks,
   saveAccounts,
-  savePortfolio
+  savePortfolio,
+  saveOrders
 }

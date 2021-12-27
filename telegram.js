@@ -25,6 +25,15 @@ const sendMes = async ({userID, mes, parseMode, disableLinkPreview, forceReply})
   }
 }
 
+const toTelegram = async (mes) => {
+  return await sendMes({
+    userID: process.env.TG_ADMIN_USER_ID,
+    mes,
+    disableLinkPreview: true
+  })
+}
+
 module.exports = {
-  sendMes
+  sendMes,
+  toTelegram
 }

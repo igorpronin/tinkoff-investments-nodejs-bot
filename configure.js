@@ -1,25 +1,35 @@
 require('dotenv').config();
 const inquirer = require('inquirer');
 const connection = require('./connection');
-const {getStocks, getAccounts, getPortfolio, saveStocks, saveAccounts, savePortfolio} = require('./api');
+const {getStocks, getAccounts, getPortfolio, getOrders, saveStocks, saveAccounts, savePortfolio, saveOrders} = require('./api');
 const {debug, toScreen} = require('./utils');
 
-const handleLoadStocks = async () => {
+const start = () => {
   console.log('Выполнение...');
+}
+
+const handleLoadStocks = async () => {
+  start();
   const stocks = await getStocks(connection);
   await saveStocks(stocks);
 }
 
 const handleLoadAccounts = async () => {
-  console.log('Выполнение...');
+  start();
   const accounts = await getAccounts(connection);
   await saveAccounts(accounts);
 }
 
 const handleLoadPortfolio = async () => {
-  console.log('Выполнение...');
+  start();
   const portfolio = await getPortfolio(connection);
   await savePortfolio(portfolio);
+}
+
+const handleLoadOrders = async () => {
+  start();
+  const orders = await getOrders(connection);
+  await saveOrders(orders);
 }
 
 const handleAction = async (answer) => {
@@ -32,6 +42,9 @@ const handleAction = async (answer) => {
       break;
     case 'load_portfolio':
       await handleLoadPortfolio();
+      break;
+    case 'load_orders':
+      await handleLoadOrders();
       break;
     case 'close':
       console.log('Завершено!');
@@ -59,6 +72,10 @@ const ask = async () => {
         value: 'load_portfolio'
       },
       {
+        name: 'Загрузить и сохранить данные по ордерам',
+        value: 'load_orders'
+      },
+      {
         name: 'Завершить',
         value: 'close'
       }
@@ -80,4 +97,4 @@ const ask = async () => {
   }
 }
 
-ask().then();
+module.exports = ask;
