@@ -21,7 +21,10 @@ const handleSubscriptionInstrumentInfoMessage = async (data) => {
   const asset = activeInstrumentInfoSubscriptions.find(item => item.figi === figi)
   if (asset) data.ticker = asset.ticker;
   const text = JSON.stringify(data, null, 2);
+  console.log('▼▼▼▼▼▼▼▼▼▼▼');
+  console.log(new Date());
   toScreen(text);
+  console.log('▲▲▲▲▲▲▲▲▲▲▲');
   await toTelegram(text);
 }
 
@@ -29,8 +32,10 @@ const handleSubscriptionOrderBookMessage = async (data) => {
   const {figi} = data;
   const asset = activeOrderBookSubscriptions.find(item => item.figi === figi)
   if (asset) data.ticker = asset.ticker;
+  console.log('▼▼▼▼▼▼▼▼▼▼▼');
   console.log(new Date());
   console.log(data);
+  console.log('▲▲▲▲▲▲▲▲▲▲▲');
 }
 
 const runMain = () => {
