@@ -3,4 +3,5 @@ data/
 node_modules/
 .idea/
 combined.log
+combined.*
 error.log
