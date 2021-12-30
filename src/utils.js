@@ -6,8 +6,8 @@ const toScreen = (message, level) => {
   const warning = chalk.bold.bgYellow.black;
   const error = chalk.bold.bgRed.white;
   let mes = message;
-  if (level === 'w') mes = ` ${warning(mes)} `;
-  if (level === 'e') mes = ` ${error(mes)} `;
+  if (level === 'w') mes = `${warning(mes)}`;
+  if (level === 'e') mes = `${error(mes)}`;
   console.log(mes);
 }
 

@@ -1,8 +1,8 @@
 require('dotenv').config();
 const inquirer = require('inquirer');
-const runConfig = require('./configure');
-const runMain = require('./main');
-const {toScreen, debug} = require('./utils');
+const runConfig = require('./src/configure');
+const {runMain} = require('./src/main');
+const {toScreen, debug} = require('./src/utils');
 
 // Возвращает флаг, который используется для того, чтобы управлять перезапуском меню
 const handleAction = async (answer) => {

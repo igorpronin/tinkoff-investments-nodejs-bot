@@ -5,3 +5,4 @@ node_modules/
 combined.log
 combined.*
 error.log
+deals.json

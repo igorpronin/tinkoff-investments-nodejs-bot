@@ -8,7 +8,7 @@ if (!fs.existsSync(dir)) {
   fs.mkdirSync(dir);
 }
 
-const errMes = 'Ошибка при операции';
+const errMes = ' Ошибка при операции ';
 
 const saveFile = async (path, data) => {
   return new Promise((resolve, reject) => {

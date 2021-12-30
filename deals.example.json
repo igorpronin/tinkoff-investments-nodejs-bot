@@ -1,0 +1,17 @@
+{
+  "PHOR": [
+    {
+      "direction": "Buy",
+      "trigger_price": 5100,
+      "order_type": "limit",
+      "order_price": 5110,
+      "lots": 1
+    },
+    {
+      "direction": "Sell",
+      "trigger_price": 5100,
+      "order_type": "market",
+      "lots": 1
+    }
+  ]
+}
