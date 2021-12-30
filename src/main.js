@@ -5,11 +5,29 @@ const connection = require('./connection');
 const stocks = require('./../data/stocks.json');
 const winston = require('winston');
 const moment = require('moment');
-const deals = require('./../deals.json');
+let deals;
+
+const dealsFilePath = './../deals.json';
+try {
+  deals = require(dealsFilePath);
+} catch (e) {
+  if (e.code === 'MODULE_NOT_FOUND') {
+    toScreen(' Необходимо создать файл "deals.json" по образцу "deals.example.json" в корневой директории проекта ', 'e');
+    process.exit(1);
+  }
+  toScreen(' Ошибка чтения файла "deals.json" ', 'e');
+  process.exit(1);
+}
 
 const store = {};
 
-const instrumentsList = Object.keys(deals);
+let instrumentsList;
+try {
+  instrumentsList = Object.keys(deals);
+} catch {
+  toScreen(' Проверьте файл "deals.json" на соответствие формату ', 'e');
+  process.exit(1);
+}
 
 instrumentsList.forEach(item => {
   store[item] = {
