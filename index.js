@@ -4,6 +4,9 @@ const runConfig = require('./src/configure');
 const {runMain} = require('./src/main');
 const {toScreen, debug} = require('./src/utils');
 
+const {version, name} = require('./package.json');
+toScreen(` ${name}, version: ${version} `, 's');
+
 // Возвращает флаг, который используется для того, чтобы управлять перезапуском меню
 const handleAction = async (answer) => {
   switch (answer) {
