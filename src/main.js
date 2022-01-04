@@ -1,55 +1,49 @@
 require('dotenv').config();
-// const {toTelegram} = require('./telegram');
+const {toTelegram} = require('./telegram');
 const {toScreen} = require('./utils');
 const connection = require('./connection');
-const stocks = require('./../data/stocks.json');
+const root = require('app-root-path');
 const winston = require('winston');
 const moment = require('moment');
-let deals;
+const {getAllDeals, markDealAsExecuted} = require('./db');
+const {getAndSaveStocks} = require('./api');
 
-const dealsFilePath = './../deals.json';
-try {
-  deals = require(dealsFilePath);
-} catch (e) {
-  if (e.code === 'MODULE_NOT_FOUND') {
-    toScreen(' Необходимо создать файл "deals.json" по образцу "deals.example.json" в корневой директории проекта ', 'e');
+let deals, instrumentsList, activeSubscriptions;
+const store = {}
+
+const fillStore = (deals) => {
+  deals.forEach(deal => {
+    const {ticker} = deal;
+    if (!store[ticker]) {
+      store[ticker] = {
+        deals: [],
+        best_bid: null,
+        best_ask: null
+      }
+    }
+    store[ticker].deals.push(deal);
+  })
+}
+
+const fillActiveSubscriptions = (stocks) => {
+  activeSubscriptions = stocks.instruments.filter(item => {
+    return instrumentsList.includes(item.ticker);
+  })
+  activeSubscriptions.forEach(item => {
+    store[item.ticker].meta = item;
+  })
+}
+
+const prepare = async () => {
+  const deals = await getAllDeals();
+  if (!deals) {
+    toScreen('Сделок нет. Добавьте сделки.', 'e');
     process.exit(1);
   }
-  toScreen(' Ошибка чтения файла "deals.json" ', 'e');
-  process.exit(1);
-}
-
-const store = {};
-
-let instrumentsList;
-try {
-  instrumentsList = Object.keys(deals);
-} catch {
-  toScreen(' Проверьте файл "deals.json" на соответствие формату ', 'e');
-  process.exit(1);
-}
-
-instrumentsList.forEach(item => {
-  store[item] = {
-    deals: deals[item],
-    best_bid: null,
-    best_ask: null
-  }
-})
-
-const activeSubscriptions = stocks.instruments.filter(item => {
-  return instrumentsList.includes(item.ticker);
-})
-
-activeSubscriptions.forEach(item => {
-  store[item.ticker].meta = item;
-})
-
-const toConsole = (time, data) => {
-  console.log('▼▼▼▼▼▼▼▼▼▼▼');
-  console.log(time.toISOString());
-  console.log(data);
-  console.log('▲▲▲▲▲▲▲▲▲▲▲');
+  const stocks = require(`${root}/data/stocks.json`);
+  fillStore(deals);
+  instrumentsList = Object.keys(store);
+  fillActiveSubscriptions(stocks);
 }
 
 const logger = winston.createLogger({
@@ -57,11 +51,11 @@ const logger = winston.createLogger({
   format: winston.format.json(),
   transports: [
     new winston.transports.File({filename: 'error.log', level: 'error'}),
-    new winston.transports.File({filename: 'combined.1.log'}),
+    new winston.transports.File({filename: 'combined.log'}),
   ],
 });
 
-const logify = async (data) => {
+const logify = (data) => {
   const {figi} = data;
   const asset = activeSubscriptions.find(item => item.figi === figi)
   if (asset) data.ticker = asset.ticker;
@@ -103,12 +97,33 @@ const handleInstrumentInfoStreamData = (data) => {
   }
 }
 
+const handleDealExec = async (deal) => {
+  const {id, ticker, direction, trigger_price, order_type, order_price, lots} = deal;
+  let mes = `Исполнение сделки...\n`;
+  mes += `ID: ${id}\n`;
+  if (direction === 'Sell') {
+    mes += `${ticker} больше ${trigger_price}.\n`;
+  }
+  if (direction === 'Buy') {
+    mes += `${ticker} меньше ${trigger_price}.\n`;
+  }
+  mes += `Отправка ${direction}-ордера типа "${order_type}"\n`;
+  if (order_type === 'limit') {
+    mes += `по цене ${order_price}\n`;
+  }
+  mes += `количество лотов: ${lots}\n`;
+  deal.is_executed = true;
+  markDealAsExecuted(id).then();
+  toTelegram(mes).then();
+}
+
 const checkDeals = (asset) => {
   const {trade_status, deals, best_bid, best_ask} = asset;
   if (trade_status !== 'normal_trading') return;
   const triggeredDeals = [];
-  deals.forEach(deal => {
-    const {direction, trigger_price, order_type, order_price, lots, is_executed} = deal;
+  if (!deals) return;
+  deals.forEach(async deal => {
+    const {id, direction, trigger_price, order_type, order_price, lots, is_executed} = deal;
     if (is_executed) return;
     if (!lots) return;
     if (!trigger_price) return;
@@ -119,15 +134,15 @@ const checkDeals = (asset) => {
     if (direction === 'Sell') {
       if (!best_bid) return;
       if (best_bid >= trigger_price) {
-        deal.is_executed = true;
         triggeredDeals.push(deal);
+        handleDealExec(deal).then();
       }
     }
     if (direction === 'Buy') {
       if (!best_ask) return;
       if (best_ask <= trigger_price) {
-        deal.is_executed = true;
         triggeredDeals.push(deal);
+        handleDealExec(deal).then();
       }
     }
   })
@@ -140,7 +155,19 @@ const checkDeals = (asset) => {
   return null;
 }
 
+const handleSendOrderResponse = (deal, responseObj) => {
+  const {id} = deal;
+  const {status, message} = responseObj;
+  let mes = `Результат отправки ордера по сделке\n${id}.\n`;
+  mes += `Статус: ${status}\n`;
+  if (message) {
+    mes += `Дополнительно: ${message}`;
+  }
+  toTelegram(mes).then();
+}
+
 const initOrders = async (triggeredObject) => {
+  // console.log(triggeredObject)
   const {asset, triggered} = triggeredObject;
   const {figi} = asset.meta;
   triggered.forEach(deal => {
@@ -152,44 +179,42 @@ const initOrders = async (triggeredObject) => {
         lots,
         price: order_price
       }).then(res => {
-        console.log(res);
+        logify(res);
+        handleSendOrderResponse(deal, res);
       });
     }
-    if (direction === 'market') {
+    if (order_type === 'market') {
       connection.marketOrder({
         figi,
         operation: direction,
         lots
       }).then(res => {
-        console.log(res);
+        logify(res);
+        handleSendOrderResponse(deal, res);
       });
     }
-    // if (direction === 'buy') {
-    //   console.log('SENDIND BUY ORDER');
-    // }
-    // if (direction === 'sell') {
-    //   console.log('SENDIND SELL ORDER');
-    // }
   })
 }
 
 const runMain = () => {
-  toScreen('Основной скрипт запущен!')
-  activeSubscriptions.forEach(item => {
-    connection.instrumentInfo({figi: item.figi}, (data) => {
-      handleInstrumentInfoStreamData(data);
-      logify(data);
-    });
-    connection.orderbook({figi: item.figi}, async (data) => {
-      const asset = handleOrderBookStreamData(data);
-      if (asset) {
-        const triggeredObject = checkDeals(asset);
-        if (triggeredObject) {
-          initOrders(triggeredObject).then();
+  toScreen('Основной скрипт запущен!');
+  getAndSaveStocks().then(async () => {
+    await prepare();
+    activeSubscriptions.forEach(item => {
+      connection.instrumentInfo({figi: item.figi}, (data) => {
+        handleInstrumentInfoStreamData(data);
+        logify(data);
+      });
+      connection.orderbook({figi: item.figi}, async (data) => {
+        const asset = handleOrderBookStreamData(data);
+        if (asset) {
+          const triggeredObject = checkDeals(asset);
+          if (triggeredObject) {
+            await initOrders(triggeredObject);
+          }
         }
-      }
-      logify(data);
-      // console.log(store);
+        logify(data);
+      });
     });
   })
 }

@@ -1,11 +1,13 @@
 require('dotenv').config();
-const inquirer = require('inquirer');
-const runConfig = require('./src/configure');
-const {runMain} = require('./src/main');
-const {toScreen, debug} = require('./src/utils');
 
+const {toScreen, debug} = require('./src/utils');
 const {version, name} = require('./package.json');
-toScreen(` ${name}, version: ${version} `, 's');
+toScreen(`${name}, version: ${version}`, 's');
+
+const inquirer = require('inquirer');
+const {ask: runConfig, } = require('./src/configure');
+const {runMain} = require('./src/main');
+// const {db} = require('./src/db');
 
 // Возвращает флаг, который используется для того, чтобы управлять перезапуском меню
 const handleAction = async (answer) => {
@@ -30,11 +32,11 @@ const ask = async () => {
     message: 'Что сделать?',
     choices: [
       {
-        name: 'Запустить конфигуратор',
+        name: 'Настроить',
         value: 'run_config'
       },
       {
-        name: 'Запустить основной скрипт',
+        name: 'Запустить скрипт',
         value: 'run_main'
       },
       {

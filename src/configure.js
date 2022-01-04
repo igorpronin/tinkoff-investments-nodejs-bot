@@ -3,13 +3,13 @@ const inquirer = require('inquirer');
 const connection = require('./connection');
 const {getStocks, getAccounts, getPortfolio, getOrders, saveStocks, saveAccounts, savePortfolio, saveOrders} = require('./api');
 const {debug, toScreen} = require('./utils');
+const {getAllDeals} = require('./db');
 
 const start = () => {
-  console.log('Выполнение...');
+  toScreen('Выполнение...');
 }
 
 const handleLoadStocks = async () => {
-  start();
   const stocks = await getStocks(connection);
   await saveStocks(stocks);
 }
@@ -34,9 +34,13 @@ const handleLoadOrders = async () => {
 
 const handleAction = async (answer) => {
   switch (answer) {
-    case 'load_stocks':
-      await handleLoadStocks();
+    case 'show_deals':
+      const deals = await getAllDeals();
+      console.log(deals);
       break;
+    // case 'load_stocks':
+    //   await handleLoadStocks();
+    //   break;
     case 'load_accounts':
       await handleLoadAccounts();
       break;
@@ -47,7 +51,7 @@ const handleAction = async (answer) => {
       await handleLoadOrders();
       break;
     case 'close':
-      console.log('Завершено!');
+      toScreen('Завершено!');
       process.exit();
       break;
   }
@@ -60,9 +64,13 @@ const ask = async () => {
     message: 'Что сделать?',
     choices: [
       {
-        name: 'Загрузить и сохранить список всех акций',
-        value: 'load_stocks'
+        name: 'Вывести сделки',
+        value: 'show_deals'
       },
+      // {
+      //   name: 'Загрузить и сохранить список всех акций',
+      //   value: 'load_stocks'
+      // },
       {
         name: 'Загрузить и сохранить список аккаунтов',
         value: 'load_accounts'
@@ -97,4 +105,4 @@ const ask = async () => {
   }
 }
 
-module.exports = ask;
+module.exports = {ask, handleLoadStocks};
