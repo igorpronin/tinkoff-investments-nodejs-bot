@@ -6,3 +6,4 @@ combined.log
 combined.*
 error.log
 deals.json
+tmp/

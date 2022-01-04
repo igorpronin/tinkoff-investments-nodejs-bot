@@ -155,7 +155,7 @@ const initOrders = async (triggeredObject) => {
         console.log(res);
       });
     }
-    if (direction === 'market') {
+    if (order_type === 'market') {
       connection.marketOrder({
         figi,
         operation: direction,
