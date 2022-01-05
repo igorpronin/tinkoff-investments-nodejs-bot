@@ -3,6 +3,7 @@ const store = {
   activeStocksByTicker: {},
   activeStocksByFigi: {},
   tickersList: null,
+  accounts: null
 }
 
 module.exports = store;

@@ -53,9 +53,13 @@ const logger = winston.createLogger({
 });
 
 const logify = (data, meta) => {
-  const {figi} = data;
-  const asset = store.activeStocksByFigi[figi];
-  if (asset) data.ticker = asset.meta.ticker;
+  if (data) {
+    const {figi} = data;
+    if (figi) {
+      const asset = store.activeStocksByFigi[figi];
+      if (asset) data.ticker = asset.meta.ticker;
+    }
+  }
   const time = moment();
   data.time = time.toISOString();
   // toConsole(time, data);
@@ -196,6 +200,7 @@ const initOrders = async (triggeredObject) => {
 }
 
 const runMain = async () => {
+  logify({}, 'app_start');
   toScreen('Основной скрипт запущен!');
   await prepare();
   for (let key in store.activeStocksByTicker) {

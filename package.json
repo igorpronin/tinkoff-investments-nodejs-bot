@@ -1,11 +1,13 @@
 {
   "name": "tinkoff-investments-nodejs-bot",
-  "version": "0.1.0",
+  "version": "0.2.2",
   "description": "",
   "main": "index.js",
   "scripts": {
     "start": "node --trace-warnings index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "version:patch": "node version.js patch",
+    "version:minor": "node version.js minor"
   },
   "keywords": [],
   "author": "",

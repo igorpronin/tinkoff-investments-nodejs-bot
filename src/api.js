@@ -12,6 +12,18 @@ if (!fs.existsSync(dir)) {
 
 const errMes = 'Ошибка при операции';
 
+const readFile = (path) => {
+  return new Promise((resolve, reject) => {
+    fs.readFile(path, 'utf8', (e, data) => {
+      if (e) {
+        reject(e);
+        return;
+      }
+      resolve(data);
+    });
+  })
+}
+
 const saveFile = async (path, data, silent = false) => {
   return new Promise((resolve, reject) => {
     fs.writeFile(path, data, (e) => {
@@ -74,7 +86,7 @@ const saveStocks = async (stocks, silent = false) => {
 const saveAccounts = async (accounts) => {
   try {
     const str = JSON.stringify(accounts, null, 2);
-    if (str) await saveFile(`${root}/data/accounts.json`, str);
+    if (str) await saveFile(`${root}/data/accounts.json`, str, true);
   } catch (e) {
     toScreen(errMes, 'e');
     debug(e);
@@ -101,21 +113,39 @@ const saveOrders = async (orders) => {
   }
 }
 
+const getAndSaveAccounts = async () => {
+  const accounts = await getAccounts(connection);
+  await saveAccounts(accounts, true);
+  return accounts;
+}
+
 const getAndSaveStocks = async () => {
   const stocks = await getStocks(connection);
   await saveStocks(stocks, true);
   return stocks;
 }
 
+const getCurrentAccount = () => {
+  try {
+    return connection.getCurrentAccountId();
+  } catch (e) {
+    toScreen(errMes, 'e');
+    debug(e);
+  }
+}
+
 module.exports = {
+  readFile,
   saveFile,
   getStocks,
   getAccounts,
+  getCurrentAccount,
   getPortfolio,
   getOrders,
   saveStocks,
   saveAccounts,
   savePortfolio,
   saveOrders,
-  getAndSaveStocks
+  getAndSaveStocks,
+  getAndSaveAccounts,
 }

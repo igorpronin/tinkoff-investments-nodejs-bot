@@ -6,7 +6,7 @@ toScreen(`${name}, version: ${version}`, 's');
 const inquirer = require('inquirer');
 const {ask: configure} = require('./src/configure');
 const {runMain} = require('./src/main');
-const {getAndSaveStocks} = require('./src/api');
+const {getAndSaveStocks, getAndSaveAccounts, getCurrentAccount} = require('./src/api');
 const store = require('./src/store');
 
 const handleAction = async (answer) => {
@@ -65,8 +65,17 @@ const getStocks = async () => {
   toScreen('Список доступных акций обновлен.');
 }
 
+const getAccounts = async () => {
+  toScreen('Запрашивается список счетов...');
+  store.accounts = await getAndSaveAccounts();
+  toScreen('Список счетов получен.');
+}
+
 const run = async () => {
-  await getStocks();
+  await Promise.all([
+    getStocks(),
+    getAccounts()
+  ])
   if (process.env.FORCE_START === '1') {
     await runMain();
   } else {
