@@ -1,55 +1,46 @@
 require('dotenv').config();
-// const {toTelegram} = require('./telegram');
+const {toTelegram} = require('./telegram');
 const {toScreen} = require('./utils');
 const connection = require('./connection');
-const stocks = require('./../data/stocks.json');
 const winston = require('winston');
 const moment = require('moment');
-let deals;
+const {getAllDeals, markDealAsExecuted} = require('./db');
+const store = require('./store');
 
-const dealsFilePath = './../deals.json';
-try {
-  deals = require(dealsFilePath);
-} catch (e) {
-  if (e.code === 'MODULE_NOT_FOUND') {
-    toScreen(' Необходимо создать файл "deals.json" по образцу "deals.example.json" в корневой директории проекта ', 'e');
+const noDealsMes = 'Сделок нет. Добавьте сделки.';
+
+const fillStocks = (deals) => {
+  for (let deal of deals) {
+    const {ticker} = deal;
+    if (!store.activeStocksByTicker[ticker]) {
+      const meta = store.stocksRaw.instruments.find(item => item.ticker === ticker);
+      if (meta) {
+        const {figi} = meta;
+        store.activeStocksByTicker[ticker] = {
+          deals: [],
+          trade_status: null,
+          best_bid: null,
+          best_ask: null,
+          meta,
+          subscriptions: []
+        }
+        store.activeStocksByFigi[figi] = store.activeStocksByTicker[ticker];
+      } else {
+        toScreen(`Сохраненная сделка недоступна для торговли. Тикера ${ticker} нет в списке брокера.`, 'e');
+        return;
+      }
+    }
+    store.activeStocksByTicker[ticker].deals.push(deal);
+  }
+}
+
+const prepare = async () => {
+  const deals = await getAllDeals();
+  if (!deals) {
+    toScreen(noDealsMes, 'e');
     process.exit(1);
   }
-  toScreen(' Ошибка чтения файла "deals.json" ', 'e');
-  process.exit(1);
-}
-
-const store = {};
-
-let instrumentsList;
-try {
-  instrumentsList = Object.keys(deals);
-} catch {
-  toScreen(' Проверьте файл "deals.json" на соответствие формату ', 'e');
-  process.exit(1);
-}
-
-instrumentsList.forEach(item => {
-  store[item] = {
-    deals: deals[item],
-    best_bid: null,
-    best_ask: null
-  }
-})
-
-const activeSubscriptions = stocks.instruments.filter(item => {
-  return instrumentsList.includes(item.ticker);
-})
-
-activeSubscriptions.forEach(item => {
-  store[item.ticker].meta = item;
-})
-
-const toConsole = (time, data) => {
-  console.log('▼▼▼▼▼▼▼▼▼▼▼');
-  console.log(time.toISOString());
-  console.log(data);
-  console.log('▲▲▲▲▲▲▲▲▲▲▲');
+  fillStocks(deals);
 }
 
 const logger = winston.createLogger({
@@ -57,57 +48,79 @@ const logger = winston.createLogger({
   format: winston.format.json(),
   transports: [
     new winston.transports.File({filename: 'error.log', level: 'error'}),
-    new winston.transports.File({filename: 'combined.1.log'}),
+    new winston.transports.File({filename: 'combined.log'}),
   ],
 });
 
-const logify = async (data) => {
+const logify = (data, meta) => {
   const {figi} = data;
-  const asset = activeSubscriptions.find(item => item.figi === figi)
-  if (asset) data.ticker = asset.ticker;
+  const asset = store.activeStocksByFigi[figi];
+  if (asset) data.ticker = asset.meta.ticker;
   const time = moment();
   data.time = time.toISOString();
   // toConsole(time, data);
   logger.log({
     level: 'info',
-    message: JSON.stringify(data)
+    message: JSON.stringify(data),
+    meta
   });
 }
 
 // Returns changed asset or null if something went wrong
 const handleOrderBookStreamData = (data) => {
   const {figi} = data;
-  const asset = activeSubscriptions.find(item => item.figi === figi)
+  const asset = store.activeStocksByFigi[figi];
   if (asset) {
     const best_bid = data?.bids?.[0]?.[0];
     const best_ask = data?.asks?.[0]?.[0];
     if (typeof best_bid !== 'undefined') {
-      store[asset.ticker].best_bid = best_bid;
+      asset.best_bid = best_bid;
     }
     if (typeof best_ask !== 'undefined') {
-      store[asset.ticker].best_ask = best_ask;
+      asset.best_ask = best_ask;
     }
-    return store[asset.ticker];
+    return asset;
   }
   return null;
 }
 
 const handleInstrumentInfoStreamData = (data) => {
   const {figi} = data;
-  const asset = activeSubscriptions.find(item => item.figi === figi)
+  const asset = store.activeStocksByFigi[figi];
   if (asset) {
     const trade_status = data?.trade_status;
     if (typeof trade_status !== 'undefined') {
-      store[asset.ticker].trade_status = trade_status;
+      asset.trade_status = trade_status;
     }
   }
+}
+
+const handleDealExec = async (deal) => {
+  const {id, ticker, direction, trigger_price, order_type, order_price, lots} = deal;
+  let mes = `Исполнение сделки...\n`;
+  mes += `ID: ${id}\n`;
+  if (direction === 'Sell') {
+    mes += `${ticker} больше ${trigger_price}.\n`;
+  }
+  if (direction === 'Buy') {
+    mes += `${ticker} меньше ${trigger_price}.\n`;
+  }
+  mes += `Отправка ${direction}-ордера типа "${order_type}"\n`;
+  if (order_type === 'limit') {
+    mes += `по цене ${order_price}\n`;
+  }
+  mes += `количество лотов: ${lots}\n`;
+  deal.is_executed = true;
+  markDealAsExecuted(id).then();
+  toTelegram(mes).then();
 }
 
 const checkDeals = (asset) => {
   const {trade_status, deals, best_bid, best_ask} = asset;
   if (trade_status !== 'normal_trading') return;
   const triggeredDeals = [];
-  deals.forEach(deal => {
+  if (!deals) return;
+  deals.forEach(async deal => {
     const {direction, trigger_price, order_type, order_price, lots, is_executed} = deal;
     if (is_executed) return;
     if (!lots) return;
@@ -119,25 +132,38 @@ const checkDeals = (asset) => {
     if (direction === 'Sell') {
       if (!best_bid) return;
       if (best_bid >= trigger_price) {
-        deal.is_executed = true;
         triggeredDeals.push(deal);
+        handleDealExec(deal).then();
       }
     }
     if (direction === 'Buy') {
       if (!best_ask) return;
       if (best_ask <= trigger_price) {
-        deal.is_executed = true;
         triggeredDeals.push(deal);
+        handleDealExec(deal).then();
       }
     }
   })
   if (triggeredDeals.length) {
-    return {
+    const result = {
       asset,
       triggered: triggeredDeals
     }
+    logify(result, 'deal_triggered');
+    return result;
   }
   return null;
+}
+
+const handleSendOrderResponse = (deal, responseObj) => {
+  const {id} = deal;
+  const {status, message} = responseObj;
+  let mes = `Результат отправки ордера по сделке\n${id}.\n`;
+  mes += `Статус: ${status}\n`;
+  if (message) {
+    mes += `Дополнительно: ${message}`;
+  }
+  toTelegram(mes).then();
 }
 
 const initOrders = async (triggeredObject) => {
@@ -152,7 +178,8 @@ const initOrders = async (triggeredObject) => {
         lots,
         price: order_price
       }).then(res => {
-        console.log(res);
+        logify(res, 'send_order_response');
+        handleSendOrderResponse(deal, res);
       });
     }
     if (order_type === 'market') {
@@ -161,37 +188,38 @@ const initOrders = async (triggeredObject) => {
         operation: direction,
         lots
       }).then(res => {
-        console.log(res);
+        logify(res, 'send_order_response');
+        handleSendOrderResponse(deal, res);
       });
     }
-    // if (direction === 'buy') {
-    //   console.log('SENDIND BUY ORDER');
-    // }
-    // if (direction === 'sell') {
-    //   console.log('SENDIND SELL ORDER');
-    // }
   })
 }
 
-const runMain = () => {
-  toScreen('Основной скрипт запущен!')
-  activeSubscriptions.forEach(item => {
-    connection.instrumentInfo({figi: item.figi}, (data) => {
-      handleInstrumentInfoStreamData(data);
-      logify(data);
-    });
-    connection.orderbook({figi: item.figi}, async (data) => {
-      const asset = handleOrderBookStreamData(data);
-      if (asset) {
-        const triggeredObject = checkDeals(asset);
-        if (triggeredObject) {
-          initOrders(triggeredObject).then();
+const runMain = async () => {
+  toScreen('Основной скрипт запущен!');
+  await prepare();
+  for (let key in store.activeStocksByTicker) {
+    if (store.activeStocksByTicker.hasOwnProperty(key)) {
+      const asset = store.activeStocksByTicker[key];
+      const {meta} = asset;
+      connection.instrumentInfo({figi: meta.figi}, (data) => {
+        handleInstrumentInfoStreamData(data);
+        logify(data, 'instrumentInfo');
+      });
+      asset.subscriptions.push('instrumentInfo');
+      connection.orderbook({figi: meta.figi}, async (data) => {
+        const asset = handleOrderBookStreamData(data);
+        if (asset) {
+          const triggeredObject = checkDeals(asset);
+          if (triggeredObject) {
+            await initOrders(triggeredObject);
+          }
         }
-      }
-      logify(data);
-      // console.log(store);
-    });
-  })
+        logify(data, 'orderbook');
+      });
+      asset.subscriptions.push('orderbook');
+    }
+  }
 }
 
-module.exports = {runMain, store};
+module.exports = {runMain, noDealsMes};
