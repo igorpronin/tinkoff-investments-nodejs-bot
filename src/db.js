@@ -19,22 +19,74 @@ const createTableDeals = () => {
 }
 
 const addMockData = () => {
-  insertDeal('GAZP', 'Sell', 490, 'limit', 489, 1);
-  insertDeal('GAZP', 'Buy', 280, 'limit', 281, 1);
+  // insertDeal('GAZP', 'Sell', 490, 'limit', 489, 1);
+  // insertDeal('GAZP', 'Buy', 280, 'limit', 281, 1);
 }
 
-const insertDeal = (ticker, direction, trigger_price, order_type, order_price, lots) => {
-  const handleErr = (err) => {
-    if (err) console.log(err);
-  };
-  const sql = `
-    INSERT INTO deals (id, ticker, direction, trigger_price, order_type, order_price, lots, is_executed) 
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?);
-  `;
-  const stmt = db.prepare(sql);
-  const values = [v4(), ticker, direction, trigger_price, order_type, order_price, lots, 0];
-  stmt.run(values, handleErr);
-  stmt.finalize();
+const insertDeal = ({ticker, direction, trigger_price, order_type, order_price, lots}) => {
+  return new Promise(resolve => {
+    try {
+      const handleErr = (e) => {
+        if (e) {
+          debug(e);
+          resolve(null);
+        }
+        resolve(true)
+      };
+      const sql = `
+        INSERT INTO deals (id, ticker, direction, trigger_price, order_type, order_price, lots, is_executed) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+      `;
+      const stmt = db.prepare(sql);
+      const values = [v4(), ticker, direction, trigger_price, order_type, order_price, lots, 0];
+      stmt.run(values, handleErr);
+      stmt.finalize();
+    } catch (e) {
+      debug(e);
+      resolve(null);
+    }
+  })
+}
+
+const deleteDeal = (id) => {
+  return new Promise(resolve => {
+    try {
+      const handleErr = (e) => {
+        if (e) {
+          debug(e);
+          resolve(null);
+        }
+        resolve(true)
+      };
+      const sql = `DELETE FROM deals WHERE id = ?;`;
+      const stmt = db.prepare(sql);
+      const values = [id];
+      stmt.run(values, handleErr);
+      stmt.finalize();
+    } catch (e) {
+      debug(e);
+      resolve(null);
+    }
+  })
+}
+
+const deleteExecutedDeals = () => {
+  return new Promise(resolve => {
+    try {
+      const handleErr = (e) => {
+        if (e) {
+          debug(e);
+          resolve(null);
+        }
+        resolve(true)
+      };
+      const sql = `DELETE FROM deals WHERE is_executed = 1;`;
+      db.run(sql, handleErr);
+    } catch (e) {
+      debug(e);
+      resolve(null);
+    }
+  })
 }
 
 const markDealAsExecuted = (id) => {
@@ -74,5 +126,8 @@ db.serialize(() => {
 module.exports = {
   db,
   getAllDeals,
-  markDealAsExecuted
+  markDealAsExecuted,
+  insertDeal,
+  deleteDeal,
+  deleteExecutedDeals
 };

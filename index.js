@@ -3,23 +3,22 @@ require('dotenv').config();
 const {toScreen, debug} = require('./src/utils');
 const {version, name} = require('./package.json');
 toScreen(`${name}, version: ${version}`, 's');
-
 const inquirer = require('inquirer');
-const {ask: runConfig, } = require('./src/configure');
+const {ask: configure} = require('./src/configure');
 const {runMain} = require('./src/main');
-// const {db} = require('./src/db');
+const {getAndSaveStocks} = require('./src/api');
+const store = require('./src/store');
 
-// Возвращает флаг, который используется для того, чтобы управлять перезапуском меню
 const handleAction = async (answer) => {
   switch (answer) {
     case 'run_config':
-      await runConfig();
-      return true;
+      await configure();
+      break;
     case 'run_main':
       await runMain();
-      return false;
+      break;
     case 'close':
-      console.log('Завершено!');
+      toScreen('Завершено!');
       process.exit();
       break;
   }
@@ -48,23 +47,32 @@ const ask = async () => {
   const questions = [actions];
   try {
     const answers = await inquirer.prompt(questions);
-    const reRun = await handleAction(answers.action);
-    if (reRun) await ask();
+    await handleAction(answers.action);
   } catch (e) {
     toScreen('Ошибка', 'e');
     debug(e);
     if (e.isTtyError) {
-      // Prompt couldn't be rendered in the current environment
-    } else {
-      // Something else went wrong
+      toScreen('Скрипт не может быть запущен в этой среде (на этом компьютере).', 'e');
     }
   }
 }
 
-if (process.env.FORCE_START === '1') {
-  runMain()
-} else {
-  ask();
+const getStocks = async () => {
+  toScreen('Обновляется список доступных акций...');
+  store.stocksRaw = await getAndSaveStocks();
+  const {instruments} = store.stocksRaw;
+  store.tickersList = instruments.map(item => item.ticker);
+  toScreen('Список доступных акций обновлен.');
 }
 
+const run = async () => {
+  await getStocks();
+  if (process.env.FORCE_START === '1') {
+    await runMain();
+  } else {
+    await ask();
+  }
+}
+
+run();
 

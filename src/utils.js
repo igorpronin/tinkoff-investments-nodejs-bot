@@ -21,8 +21,11 @@ const toConsole = (time, data) => {
   console.log('▲▲▲▲▲▲▲▲▲▲▲');
 }
 
-const debug = (mes) => {
-  if (process.env.DEBUG === '1') console.log(` [DEBUG] ${mes}`);
+const debug = (any) => {
+  if (process.env.DEBUG === '1') {
+    console.log('[DEBUG]');
+    console.log(any);
+  }
 }
 
 module.exports = {

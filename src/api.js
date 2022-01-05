@@ -10,7 +10,7 @@ if (!fs.existsSync(dir)) {
   fs.mkdirSync(dir);
 }
 
-const errMes = ' Ошибка при операции ';
+const errMes = 'Ошибка при операции';
 
 const saveFile = async (path, data, silent = false) => {
   return new Promise((resolve, reject) => {
@@ -104,6 +104,7 @@ const saveOrders = async (orders) => {
 const getAndSaveStocks = async () => {
   const stocks = await getStocks(connection);
   await saveStocks(stocks, true);
+  return stocks;
 }
 
 module.exports = {
