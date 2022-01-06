@@ -9,6 +9,18 @@ const {runMain} = require('./src/main');
 const {getAndSaveStocks, getAndSaveAccounts, getCurrentAccount} = require('./src/api');
 const store = require('./src/store');
 
+const args = {};
+
+process.argv.forEach(item => {
+  try {
+    if (item.startsWith('-')) {
+      const parts = item.split('=');
+      const arg = parts[0].substring(1);
+      args[arg] = parts[1];
+    }
+  } catch {}
+})
+
 const handleAction = async (answer) => {
   switch (answer) {
     case 'run_config':
@@ -76,7 +88,7 @@ const run = async () => {
     getStocks(),
     getAccounts()
   ])
-  if (process.env.FORCE_START === '1') {
+  if ((process.env.FORCE_START === '1' && args.F !== '0') || args.F === '1') {
     await runMain();
   } else {
     await ask();
