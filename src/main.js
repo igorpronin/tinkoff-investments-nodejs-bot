@@ -2,10 +2,11 @@ require('dotenv').config();
 const {toTelegram} = require('./telegram');
 const {toScreen} = require('./utils');
 const connection = require('./connection');
-const winston = require('winston');
-const moment = require('moment');
+// const winston = require('winston');
+// const moment = require('moment');
 const {getAllDeals, markDealAsExecuted} = require('./db');
 const store = require('./store');
+const {logify} = require('./logger');
 
 const noDealsMes = 'Сделок нет. Добавьте сделки.';
 
@@ -41,33 +42,6 @@ const prepare = async () => {
     process.exit(1);
   }
   fillStocks(deals);
-}
-
-const logger = winston.createLogger({
-  level: 'info',
-  format: winston.format.json(),
-  transports: [
-    new winston.transports.File({filename: 'error.log', level: 'error'}),
-    new winston.transports.File({filename: 'combined.log'}),
-  ],
-});
-
-const logify = (data, meta) => {
-  if (data) {
-    const {figi} = data;
-    if (figi) {
-      const asset = store.activeStocksByFigi[figi];
-      if (asset) data.ticker = asset.meta.ticker;
-    }
-  }
-  const time = moment();
-  data.time = time.toISOString();
-  // toConsole(time, data);
-  logger.log({
-    level: 'info',
-    message: JSON.stringify(data),
-    meta
-  });
 }
 
 // Returns changed asset or null if something went wrong

@@ -1,6 +1,6 @@
 {
   "name": "tinkoff-investments-nodejs-bot",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -22,6 +22,7 @@
     "moment": "^2.29.1",
     "sqlite3": "^5.0.2",
     "uuid": "^8.3.2",
-    "winston": "^3.3.3"
+    "winston": "^3.3.3",
+    "winston-daily-rotate-file": "^4.5.5"
   }
 }

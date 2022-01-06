@@ -7,3 +7,4 @@ combined.*
 error.log
 deals.json
 tmp/
+logs/
