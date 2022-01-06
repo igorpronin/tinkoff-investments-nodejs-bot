@@ -2,8 +2,10 @@ require('dotenv').config();
 const inquirer = require('inquirer');
 const {debug, toScreen} = require('./utils');
 const store = require('./store');
+const connection = require('./connection');
 const {getAllDeals, insertDeal, deleteDeal, deleteExecutedDeals} = require('./db');
 const {noDealsMes} = require('./main');
+const moment = require('moment');
 
 const start = () => {
   toScreen('Выполнение...');
@@ -211,13 +213,37 @@ const handleAddDeal = async () => {
     return await askLots();
   }
   params.ticker = await askTicker();
+  const asset = store.stocksRaw.instruments.find(item => item.ticker === params.ticker);
+  try {
+    const {candles} = await connection.candlesGet({
+      figi: asset.figi,
+      interval: 'day',
+      from: moment().subtract(7, 'd').format(),
+      to: moment().format(),
+    });
+    params.price = candles[candles.length - 1].c;
+  } catch {}
+  let m1 = `Выбрано: ${params.ticker}, ${asset.name} | В лоте шт.: ${asset.lot} | Валюта: ${asset.currency}`;
+  if (params.price) {
+    m1 += ` | Цена: ${params.price.toFixed(2)}`
+  }
+  if (asset.lot > 1) {
+    m1 += ` (за лот ${(params.price * asset.lot).toFixed(2)})`;
+  }
+  toScreen(m1, 'w');
   params.direction = await askDirection();
+  params.lots = await askLots();
+  if (params.price) {
+    let m2 = `Сумма сделки по текущей цене: ${(params.price * asset.lot * params.lots).toFixed(2)} ${asset.currency}`;
+    toScreen(m2, 'w');
+  }
   params.trigger_price = await askTriggerPrice();
+  let m3 = `Сумма сделки по целевой цене: ${(params.trigger_price * asset.lot * params.lots).toFixed(2)} ${asset.currency}`;
+  toScreen(m3, 'w');
   params.order_type = await askOrderType();
   if (params.order_type === 'limit') {
     params.order_price = await askOrderPrice();
   }
-  params.lots = await askLots();
   const result = await insertDeal(params);
   if (result) {
     toScreen(`Сделка по тикеру ${params.ticker} добавлена.`, 's');
