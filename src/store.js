@@ -3,7 +3,9 @@ const store = {
   activeStocksByTicker: {},
   activeStocksByFigi: {},
   tickersList: null,
-  accounts: null
+  accounts: null,
+  portfolio: {},
+  portfolioCurrencies: {}
 }
 
 module.exports = store;

@@ -6,7 +6,10 @@ toScreen(`${name}, version: ${version}`, 's');
 const inquirer = require('inquirer');
 const {ask: configure} = require('./src/configure');
 const {runMain} = require('./src/main');
-const {getAndSaveStocks, getAndSaveAccounts, getCurrentAccount} = require('./src/api');
+const {
+  getAndSaveStocks, getAndSaveAccounts, getAndSavePortfolio,
+  getCurrentAccount, setCurrentAccount, getAndSavePortfolioCurrencies
+} = require('./src/api');
 const store = require('./src/store');
 
 const args = {};
@@ -79,15 +82,38 @@ const getStocks = async () => {
 
 const getAccounts = async () => {
   toScreen('Запрашивается список счетов...');
-  store.accounts = await getAndSaveAccounts();
+  const {accounts} = await getAndSaveAccounts();
+  store.accounts = accounts;
   toScreen('Список счетов получен.');
+}
+
+const getPortfolioByAccount = async (accID) => {
+  toScreen(`Запрашивается портфель по аккаунту ${accID}...`);
+  const {positions} = await getAndSavePortfolio(accID);
+  store.portfolio[accID] = positions;
+  toScreen(`Портфель получен по аккаунту ${accID}.`);
+}
+
+const getPortfolioCurrenciesByAccount = async (accID) => {
+  toScreen(`Запрашиваются валюты по аккаунту ${accID}...`);
+  const {currencies} = await getAndSavePortfolioCurrencies(accID);
+  store.portfolioCurrencies[accID] = currencies;
+  toScreen(`Валюты получены по аккаунту ${accID}.`);
 }
 
 const run = async () => {
   await Promise.all([
     getStocks(),
-    getAccounts()
-  ])
+    getAccounts(),
+  ]);
+  for (let i = 0; i < store.accounts.length; i++) {
+    const accID = store.accounts[i].brokerAccountId;
+    setCurrentAccount(accID);
+    await Promise.all([
+      getPortfolioByAccount(accID),
+      getPortfolioCurrenciesByAccount(accID)
+    ])
+  }
   if ((process.env.FORCE_START === '1' && args.F !== '0') || args.F === '1') {
     await runMain();
   } else {

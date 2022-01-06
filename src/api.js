@@ -64,6 +64,15 @@ const getPortfolio = async (connection) => {
   }
 }
 
+const getPortfolioCurrencies = async (connection) => {
+  try {
+    return await connection.portfolioCurrencies();
+  } catch (e) {
+    toScreen(errMes, 'e');
+    debug(e);
+  }
+}
+
 const getOrders = async (connection) => {
   try {
     return await connection.orders();
@@ -93,10 +102,20 @@ const saveAccounts = async (accounts) => {
   }
 }
 
-const savePortfolio = async (portfolio) => {
+const savePortfolio = async (portfolio, accID) => {
   try {
     const str = JSON.stringify(portfolio, null, 2);
-    if (str) await saveFile(`${root}/data/portfolio.json`, str);
+    if (str) await saveFile(`${root}/data/portfolio_${accID}.json`, str, true);
+  } catch (e) {
+    toScreen(errMes, 'e');
+    debug(e);
+  }
+}
+
+const savePortfolioCurrencies = async (data, accID) => {
+  try {
+    const str = JSON.stringify(data, null, 2);
+    if (str) await saveFile(`${root}/data/currencies_${accID}.json`, str, true);
   } catch (e) {
     toScreen(errMes, 'e');
     debug(e);
@@ -115,8 +134,20 @@ const saveOrders = async (orders) => {
 
 const getAndSaveAccounts = async () => {
   const accounts = await getAccounts(connection);
-  await saveAccounts(accounts, true);
+  await saveAccounts(accounts);
   return accounts;
+}
+
+const getAndSavePortfolio = async (accID) => {
+  const portfolio = await getPortfolio(connection);
+  await savePortfolio(portfolio, accID);
+  return portfolio;
+}
+
+const getAndSavePortfolioCurrencies = async (accID) => {
+  const currencies = await getPortfolioCurrencies(connection);
+  await savePortfolioCurrencies(currencies, accID);
+  return currencies;
 }
 
 const getAndSaveStocks = async () => {
@@ -134,12 +165,16 @@ const getCurrentAccount = () => {
   }
 }
 
+const setCurrentAccount = (accId) => {
+  connection.setCurrentAccountId(accId);
+  return getCurrentAccount();
+}
+
 module.exports = {
   readFile,
   saveFile,
   getStocks,
   getAccounts,
-  getCurrentAccount,
   getPortfolio,
   getOrders,
   saveStocks,
@@ -148,4 +183,8 @@ module.exports = {
   saveOrders,
   getAndSaveStocks,
   getAndSaveAccounts,
+  getAndSavePortfolio,
+  getAndSavePortfolioCurrencies,
+  getCurrentAccount,
+  setCurrentAccount,
 }
