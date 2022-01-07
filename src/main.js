@@ -174,7 +174,7 @@ const initOrders = async (triggeredObject) => {
 }
 
 const runMain = async () => {
-  logify({}, 'app_start');
+  logify({active_acc: store.activeAcc}, 'app_start');
   toScreen('Основной скрипт запущен!');
   await prepare();
   for (let key in store.activeStocksByTicker) {

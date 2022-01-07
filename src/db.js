@@ -18,6 +18,16 @@ const createTableDeals = () => {
   db.run(sql, handleErr);
 }
 
+const createTableSettings = () => {
+  const handleErr = () => {}
+  const sql = `CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT,
+    description TEXT
+  );`;
+  db.run(sql, handleErr);
+}
+
 const addMockData = () => {
   // insertDeal('GAZP', 'Sell', 490, 'limit', 489, 1);
   // insertDeal('GAZP', 'Buy', 280, 'limit', 281, 1);
@@ -39,6 +49,31 @@ const insertDeal = ({ticker, direction, trigger_price, order_type, order_price, 
       `;
       const stmt = db.prepare(sql);
       const values = [v4(), ticker, direction, trigger_price, order_type, order_price, lots, 0];
+      stmt.run(values, handleErr);
+      stmt.finalize();
+    } catch (e) {
+      debug(e);
+      resolve(null);
+    }
+  })
+}
+
+const insertSettings = ({key, value, description}) => {
+  return new Promise(resolve => {
+    try {
+      const handleErr = (e) => {
+        if (e) {
+          debug(e);
+          resolve(null);
+        }
+        resolve(true)
+      };
+      const sql = `
+        INSERT INTO settings (key, value, description) 
+        VALUES (?, ?, ?);
+      `;
+      const stmt = db.prepare(sql);
+      const values = [key, value, description];
       stmt.run(values, handleErr);
       stmt.finalize();
     } catch (e) {
@@ -91,15 +126,35 @@ const deleteExecutedDeals = () => {
 
 const markDealAsExecuted = (id) => {
   return new Promise((resolve, reject) => {
-    const handleErr = (err) => {
-      if (err) console.log(err);
+    const handler = (err) => {
+      if (err) {
+        console.log(err);
+        resolve(null);
+      }
+      resolve(true);
     };
     const sql = `UPDATE deals SET is_executed = 1 WHERE id = (?);`;
     const stmt = db.prepare(sql);
     const values = [id];
-    stmt.run(values, handleErr);
+    stmt.run(values, handler);
     stmt.finalize();
-    resolve(true);
+  })
+}
+
+const setSettingVal = (key, val) => {
+  return new Promise((resolve, reject) => {
+    const handler = (err) => {
+      if (err) {
+        console.log(err);
+        resolve(null);
+      }
+      resolve(true);
+    };
+    const sql = `UPDATE settings SET value = (?) WHERE key = (?);`;
+    const stmt = db.prepare(sql);
+    const values = [val, key];
+    stmt.run(values, handler);
+    stmt.finalize();
   })
 }
 
@@ -113,9 +168,32 @@ const getAllDeals = () => {
   })
 }
 
+const getSettingByKey = (key) => {
+  return new Promise((resolve, reject) => {
+    const handler = (err, data) => {
+      if (err) {
+        console.log(err);
+        resolve(null);
+        return;
+      }
+      if (data.length) {
+        resolve(data[0]);
+      }
+      resolve(null);
+    };
+    const sql = `SELECT * FROM settings WHERE key = (?);`;
+    const stmt = db.prepare(sql);
+    const values = [key];
+    stmt.all(values, handler);
+    stmt.finalize();
+  })
+}
+
 const dbActions = async () => {
   createTableDeals();
-  // addMockData();
+  createTableSettings();
+  const res = await getSettingByKey('active_acc');
+  if (!res) await insertSettings({key: 'active_acc', value: null});
 }
 
 db.serialize(() => {
@@ -129,5 +207,7 @@ module.exports = {
   markDealAsExecuted,
   insertDeal,
   deleteDeal,
-  deleteExecutedDeals
+  deleteExecutedDeals,
+  setSettingVal,
+  getSettingByKey,
 };

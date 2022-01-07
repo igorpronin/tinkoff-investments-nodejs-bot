@@ -3,9 +3,10 @@ const inquirer = require('inquirer');
 const {debug, toScreen} = require('./utils');
 const store = require('./store');
 const connection = require('./connection');
-const {getAllDeals, insertDeal, deleteDeal, deleteExecutedDeals} = require('./db');
+const {getAllDeals, insertDeal, deleteDeal, deleteExecutedDeals, setSettingVal} = require('./db');
 const {noDealsMes} = require('./main');
 const moment = require('moment');
+const {setCurrentAccount} = require('./api');
 
 const start = () => {
   toScreen('Выполнение...');
@@ -253,6 +254,30 @@ const handleAddDeal = async () => {
   return null;
 }
 
+const setAcc = async () => {
+  toScreen('Установка счета для торговли...', 'w');
+  const choices = [];
+  const q1 = [
+    {
+      type: 'list',
+      name: 'accID',
+      message: 'Аккаунт',
+      choices
+    }
+  ]
+  store.accounts.forEach(acc => {
+    choices.push({
+      value: acc.brokerAccountId,
+      name: `${acc.brokerAccountType}, ${acc.brokerAccountId}`
+    })
+  })
+  let {accID} = await inquirer.prompt(q1);
+  setCurrentAccount(accID);
+  store.activeAcc = accID;
+  await setSettingVal('active_acc', accID);
+  toScreen(`Активный счет ${accID} установлен.`, 's');
+}
+
 const handleAction = async (answer) => {
   switch (answer) {
     case 'deals':
@@ -269,6 +294,10 @@ const handleAction = async (answer) => {
       break;
     case 'delete_executed_deals':
       await deleteExecuted();
+      await ask();
+      break;
+    case 'set_acc':
+      await setAcc();
       await ask();
       break;
     case 'close':
@@ -299,6 +328,10 @@ const ask = async () => {
       {
         name: 'Удалить исполненные сделки',
         value: 'delete_executed_deals'
+      },
+      {
+        name: 'Выбрать счет для торговли',
+        value: 'set_acc'
       },
       {
         name: 'Завершить',

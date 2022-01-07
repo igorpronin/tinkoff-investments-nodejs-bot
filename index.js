@@ -8,9 +8,11 @@ const {ask: configure} = require('./src/configure');
 const {runMain} = require('./src/main');
 const {
   getAndSaveStocks, getAndSaveAccounts, getAndSavePortfolio,
-  getCurrentAccount, setCurrentAccount, getAndSavePortfolioCurrencies
+  setCurrentAccount, getAndSavePortfolioCurrencies
 } = require('./src/api');
+const {getSettingByKey, setSettingVal} = require('./src/db');
 const store = require('./src/store');
+const {logify} = require('./src/logger');
 
 const args = {};
 
@@ -114,6 +116,16 @@ const run = async () => {
       getPortfolioCurrenciesByAccount(accID)
     ])
   }
+  const {value} = await getSettingByKey('active_acc');
+  const accountsList = store.accounts.map(acc => acc.brokerAccountId);
+  if (accountsList.includes(value)) {
+    store.activeAcc = value;
+  } else {
+    store.activeAcc = accountsList[0];
+    await setSettingVal('active_acc', accountsList[0]);
+  }
+  setCurrentAccount(store.activeAcc);
+  toScreen(`Активный счет: ${store.activeAcc}`, 'w');
   if ((process.env.FORCE_START === '1' && args.F !== '0') || args.F === '1') {
     await runMain();
   } else {

@@ -4,6 +4,7 @@ const store = {
   activeStocksByFigi: {},
   tickersList: null,
   accounts: null,
+  activeAcc: null,
   portfolio: {},
   portfolioCurrencies: {}
 }
