@@ -12,7 +12,6 @@ const {
 } = require('./src/api');
 const {getSettingByKey, setSettingVal} = require('./src/db');
 const store = require('./src/store');
-const {logify} = require('./src/logger');
 
 const args = {};
 
@@ -103,6 +102,27 @@ const getPortfolioCurrenciesByAccount = async (accID) => {
   toScreen(`Валюты получены по аккаунту ${accID}.`);
 }
 
+const showActiveAcc = () => {
+  toScreen(`Активный счет: ${store.activeAcc}`, 'w');
+  let mes1 = `Остатки |`;
+  let mes2 = `Заблокировано |`;
+  let emptyMes1 = true;
+  let emptyMes2 = true;
+  store.portfolioCurrencies[store.activeAcc].forEach(cur => {
+    const {currency, balance, blocked} = cur;
+    if (balance !== 0) {
+      mes1 += ` ${balance.toFixed(2)} ${currency} |`;
+      emptyMes1 = false;
+    }
+    if (blocked && blocked !== 0) {
+      mes2 += ` ${blocked.toFixed(2)} ${currency} |`;
+      emptyMes2 = false;
+    }
+  })
+  if (!emptyMes1) toScreen(mes1, 'w');
+  if (!emptyMes2) toScreen(mes2, 'w');
+}
+
 const run = async () => {
   await Promise.all([
     getStocks(),
@@ -125,7 +145,7 @@ const run = async () => {
     await setSettingVal('active_acc', accountsList[0]);
   }
   setCurrentAccount(store.activeAcc);
-  toScreen(`Активный счет: ${store.activeAcc}`, 'w');
+  showActiveAcc();
   if ((process.env.FORCE_START === '1' && args.F !== '0') || args.F === '1') {
     await runMain();
   } else {
