@@ -219,7 +219,7 @@ const dbActions = async () => {
     const r3 = await getSettingByKey('max_sell_sum');
     if (!r3) await insertSettings({key: 'max_sell_sum', value: null});
   }
-  await Promise.all([f1(), f2(), f3]);
+  await Promise.all([f1(), f2(), f3()]);
 }
 
 db.serialize(() => {
