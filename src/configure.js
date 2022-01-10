@@ -20,26 +20,60 @@ const {availableCurrenciesList} = store;
 //   await saveOrders(orders);
 // }
 
-const getDealMes = (i, deal) => {
-  const {id, ticker, direction, trigger_price, order_type, order_price, lots, is_executed} = deal;
+const getDealMesAndSum = (i, deal) => {
+  const {id, ticker, direction, trigger_price, order_type, order_price, lots, lot, is_executed, currency} = deal;
   const prefix = is_executed ? '[ИСПОЛНЕНА]' : '[АКТИВНА]  ';
   let ordStr = `ордер: ${direction}, ${order_type}, лотов ${lots}`;
   if (order_type === 'limit') {
     ordStr += `, цена исполнения: ${order_price}`;
   }
-  return `${prefix} ${i + 1}. ${id.slice(0, 9)}... | ${ticker} | цена активации: ${trigger_price} | ${ordStr}`;
+  let dealSum = trigger_price * lots * lot;
+  if (currency !== 'RUB') {
+    const currencyPrice = store.currencies[currency].price;
+    dealSum = dealSum * currencyPrice;
+  }
+  const mes = `${prefix} ${i + 1}. ${id.slice(0, 9)}... | ${ticker} | цена активации: ${trigger_price} | ${ordStr} | сумма сделки: ${dealSum.toFixed(2)} RUB`;
+  return {mes, sum: dealSum}
 }
 
 const showDeals = () => {
   return new Promise(async (resolve) => {
     const deals = await getAllDeals();
     if (deals) {
+      const total = {
+        stocks: {
+          activeBuys: 0,
+          activeSells: 0
+        },
+        currencies: {
+          activeBuys: 0,
+          activeSells: 0
+        }
+      }
       deals.forEach((deal, i) => {
-        const {is_executed} = deal;
-        const mes = getDealMes(i, deal);
+        const {is_executed, direction, type} = deal;
+        const {mes, sum} = getDealMesAndSum(i, deal);
+        if (!is_executed) {
+          if (direction === 'Buy' && type === 'stock') {
+            total.stocks.activeBuys = total.stocks.activeBuys + sum;
+          }
+          if (direction === 'Sell' && type === 'stock') {
+            total.stocks.activeSells = total.stocks.activeSells + sum;
+          }
+          if (direction === 'Buy' && type === 'currency') {
+            total.currencies.activeBuys = total.currencies.activeBuys + sum;
+          }
+          if (direction === 'Sell' && type === 'currency') {
+            total.currencies.activeSells = total.currencies.activeSells + sum;
+          }
+        }
         const level = is_executed ? 'w' : 's';
         toScreen(mes, level);
       })
+      if (total.stocks.activeBuys) toScreen(`Сумма по активным сделкам на покупку акций: ${total.stocks.activeBuys} RUB`, 'w');
+      if (total.stocks.activeSells) toScreen(`Сумма по активным сделкам на продажу акций: ${total.stocks.activeSells} RUB`, 'w');
+      if (total.currencies.activeBuys) toScreen(`Сумма по активным сделкам на покупку валют: ${total.currencies.activeBuys} RUB`, 'w');
+      if (total.currencies.activeSells) toScreen(`Сумма по активным сделкам на продажу валют: ${total.currencies.activeSells} RUB`, 'w');
     } else {
       toScreen(noDealsMes, 'w');
       resolve();
@@ -205,6 +239,8 @@ const addStockDeal = async (params) => {
   params.type = 'stock';
   params.is_limited = 1;
   const asset = store.stocksRaw.instruments.find(item => item.ticker === params.ticker);
+  params.lot = asset.lot;
+  params.currency = asset.currency;
   const candles = await getCandlesLast7Days(asset.figi);
   params.price = candles[candles.length - 1].c;
   let m1 = `Выбрано: ${params.ticker}, ${asset.name} | В лоте шт.: ${asset.lot} | Валюта: ${asset.currency}`;
@@ -250,6 +286,8 @@ const addStockDeal = async (params) => {
 const addCurrencyDeal = async (params) => {
   params.type = 'currency';
   params.is_limited = 0;
+  params.lot = 1000;
+  params.currency = 'RUB';
   if (params.ticker === 'USDRUBTOM') {
     params.price = store.currencies.USD.price;
   }
@@ -297,8 +335,6 @@ const handleAddDeal = async () => {
   toScreen('Ошибка при добавлении сделки.', 'e');
   return null;
 }
-
-
 
 const setAcc = async () => {
   toScreen('Установка счета для торговли...', 'w');
@@ -433,7 +469,7 @@ const ask = async () => {
         value: 'set_acc'
       },
       {
-        name: 'Установить органичения сумм сделок',
+        name: 'Установить ограничения сумм сделок',
         value: 'set_limits'
       },
       {

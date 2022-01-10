@@ -28,8 +28,18 @@ const addColsTypeAndIsLimitedToDeals = () => {
     ALTER TABLE deals
     ADD COLUMN is_limited INTEGER;
   `;
+  const sql3 = `
+    ALTER TABLE deals
+    ADD COLUMN lot INTEGER;
+  `;
+  const sql4 = `
+    ALTER TABLE deals
+    ADD COLUMN currency TEXT;
+  `;
   db.run(sql, handleErr);
   db.run(sql2, handleErr);
+  db.run(sql3, handleErr);
+  db.run(sql4, handleErr);
 }
 
 const createTableSettings = () => {
@@ -47,7 +57,7 @@ const createTableSettings = () => {
 //   // insertDeal('GAZP', 'Buy', 280, 'limit', 281, 1);
 // }
 
-const insertDeal = ({ticker, direction, trigger_price, order_type, order_price, lots, type, is_limited}) => {
+const insertDeal = ({ticker, direction, trigger_price, order_type, order_price, lots, lot, type, is_limited, currency}) => {
   return new Promise(resolve => {
     try {
       const handleErr = (e) => {
@@ -58,11 +68,11 @@ const insertDeal = ({ticker, direction, trigger_price, order_type, order_price, 
         resolve(true)
       };
       const sql = `
-        INSERT INTO deals (id, ticker, direction, trigger_price, order_type, order_price, lots, is_executed, type, is_limited) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        INSERT INTO deals (id, ticker, direction, trigger_price, order_type, order_price, lots, lot, is_executed, type, is_limited, currency) 
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?);
       `;
       const stmt = db.prepare(sql);
-      const values = [v4(), ticker, direction, trigger_price, order_type, order_price, lots, 0, type, is_limited];
+      const values = [v4(), ticker, direction, trigger_price, order_type, order_price, lots, lot, 0, type, is_limited, currency];
       stmt.run(values, handleErr);
       stmt.finalize();
     } catch (e) {
