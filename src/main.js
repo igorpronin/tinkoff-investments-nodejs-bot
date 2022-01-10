@@ -8,28 +8,36 @@ const {logify} = require('./logger');
 
 const noDealsMes = 'Сделок нет. Добавьте сделки.';
 
-const fillStocks = (deals) => {
+const fillStocksAndCurrenciesDeals = (deals) => {
   for (let deal of deals) {
-    const {ticker} = deal;
-    if (!store.activeStocksByTicker[ticker]) {
-      const meta = store.stocksRaw.instruments.find(item => item.ticker === ticker);
-      if (meta) {
-        const {figi} = meta;
-        store.activeStocksByTicker[ticker] = {
-          deals: [],
-          trade_status: null,
-          best_bid: null,
-          best_ask: null,
-          meta,
-          subscriptions: []
+    const {ticker, type} = deal;
+    if (type === 'stock') {
+      if (!store.activeStocksByTicker[ticker]) {
+        const meta = store.stocksRaw.instruments.find(item => item.ticker === ticker);
+        if (meta) {
+          const {figi} = meta;
+          store.activeStocksByTicker[ticker] = {
+            deals: [],
+            trade_status: null,
+            best_bid: null,
+            best_ask: null,
+            meta,
+            subscriptions: []
+          }
+          store.activeStocksByFigi[figi] = store.activeStocksByTicker[ticker];
+        } else {
+          toScreen(`Сохраненная сделка недоступна для торговли. Тикера ${ticker} нет в списке брокера.`, 'e');
+          return;
         }
-        store.activeStocksByFigi[figi] = store.activeStocksByTicker[ticker];
-      } else {
-        toScreen(`Сохраненная сделка недоступна для торговли. Тикера ${ticker} нет в списке брокера.`, 'e');
-        return;
       }
+      store.activeStocksByTicker[ticker].deals.push(deal);
     }
-    store.activeStocksByTicker[ticker].deals.push(deal);
+    if (type === 'currency' && ticker === 'USDRUBTOM') {
+      store.currencies.USD.deals.push(deal);
+    }
+    if (type === 'currency' && ticker === 'EURRUBTOM') {
+      store.currencies.EUR.deals.push(deal);
+    }
   }
 }
 
@@ -39,7 +47,7 @@ const prepare = async () => {
     toScreen(noDealsMes, 'e');
     process.exit(1);
   }
-  fillStocks(deals);
+  fillStocksAndCurrenciesDeals(deals);
 }
 
 const instrumentInfoStreamHandler = async (data) => {
@@ -50,15 +58,15 @@ const instrumentInfoStreamHandler = async (data) => {
 const orderBookStreamHandler = async (data) => {
   const asset = handleOrderBookStreamData(data);
   if (asset) {
-    const triggeredObject = checkDeals(asset);
+    const triggeredObject = checkStockDeals(asset);
     if (triggeredObject) {
       await initOrders(triggeredObject);
     }
   }
-  logify(data, 'orderbook');
+  logify(data, 'orderbook_stock');
 }
 
-const orderBookStreamCurrencyHandler = (data) => {
+const orderBookStreamCurrencyHandler = async (data) => {
   const {figi, bids, asks} = data;
   let best_bid, best_ask;
   if (bids && bids.length) {
@@ -77,6 +85,10 @@ const orderBookStreamCurrencyHandler = (data) => {
     if (best_ask) {
       store.currencies.USD.best_ask = best_ask;
     }
+    const triggered = checkCurrencyDeals('USD');
+    if (triggered) {
+      await initOrders(triggered);
+    }
   }
   if (figi === 'BBG0013HJJ31') { // EUR
     if (best_bid && best_ask) {
@@ -88,7 +100,12 @@ const orderBookStreamCurrencyHandler = (data) => {
     if (best_ask) {
       store.currencies.EUR.best_ask = best_ask;
     }
+    const triggered = checkCurrencyDeals('EUR');
+    if (triggered) {
+      await initOrders(triggered);
+    }
   }
+  logify(data, 'orderbook_currency');
 }
 
 const instrumentInfoStreamCurrencyHandler = (data) => {
@@ -150,12 +167,12 @@ const handleDealExec = async (deal) => {
   toTelegram(mes).then();
 }
 
-const checkDeals = (asset) => {
+const checkStockDeals = (asset) => {
   const {trade_status, deals, best_bid, best_ask} = asset;
-  if (trade_status !== 'normal_trading') return;
+  if (trade_status !== 'normal_trading') return null;
   const triggeredDeals = [];
-  if (!deals) return;
-  deals.forEach(async deal => {
+  if (!deals) return null;
+  deals.forEach(deal => {
     const {direction, trigger_price, order_type, order_price, lots, is_executed} = deal;
     if (is_executed) return;
     if (!lots) return;
@@ -181,10 +198,53 @@ const checkDeals = (asset) => {
   })
   if (triggeredDeals.length) {
     const result = {
+      type: 'stk', // stock
       asset,
       triggered: triggeredDeals
     }
-    logify(result, 'deals_triggered');
+    logify(result, 'deals_stock_triggered');
+    return result;
+  }
+  return null;
+}
+
+// currency: USD | EUR
+const checkCurrencyDeals = (currency) => {
+  const {trade_status, deals, best_bid, best_ask} = store.currencies[currency];
+  if (trade_status !== 'normal_trading') return null;
+  const triggeredDeals = [];
+  if (!deals) return null;
+  deals.forEach(deal => {
+    const {direction, trigger_price, order_type, order_price, lots, is_executed} = deal;
+    if (is_executed) return;
+    if (!lots) return;
+    if (!trigger_price) return;
+    if (!direction) return;
+    if (!(direction === 'Buy' || direction === 'Sell')) return;
+    if (!(order_type === 'limit' || order_type === 'market')) return;
+    if (order_type === 'limit' && !order_price) return;
+    if (direction === 'Sell') {
+      if (!best_bid) return;
+      if (best_bid >= trigger_price) {
+        triggeredDeals.push(deal);
+        handleDealExec(deal).then();
+      }
+    }
+    if (direction === 'Buy') {
+      if (!best_ask) return;
+      if (best_ask <= trigger_price) {
+        triggeredDeals.push(deal);
+        handleDealExec(deal).then();
+      }
+    }
+  })
+  if (triggeredDeals.length) {
+    const result = {
+      type: 'cur', // currency
+      asset: currency,
+      triggered: triggeredDeals
+    }
+    logify(result, 'deals_currency_triggered');
     return result;
   }
   return null;
@@ -232,14 +292,34 @@ const handleSendOrderResponse = (deal, responseObj) => {
   toTelegram(mes).then();
 }
 
+const handleSendOrderError = (deal, error) => {
+  const {id} = deal;
+  const {payload, status} = error;
+  const {message} = payload;
+  let mes = `Результат отправки ордера по сделке\n${id}.\n`;
+  mes += `Статус: ${status}\n`;
+  if (message) {
+    mes += `Дополнительно: ${message}`;
+  }
+  toTelegram(mes).then();
+}
+
 const initOrders = async (triggeredObject) => {
-  const {asset, triggered} = triggeredObject;
-  const {figi} = asset.meta;
+  const {asset, triggered, type} = triggeredObject;
+  let figi;
+  if (type === 'stk') {
+    figi = asset.meta.figi;
+  }
+  if (type === 'cur') {
+    figi = store.currencies[asset].figi;
+  }
   triggered.forEach(deal => {
-    const {direction, order_type, order_price, lots} = deal;
+    const {direction, order_type, order_price, lots, is_limited} = deal;
     try {
-      const isLimit = checkLimits(deal, asset);
-      if (isLimit) return;
+      if (is_limited) {
+        const isLimit = checkLimits(deal, asset);
+        if (isLimit) return;
+      }
     } catch (e) {
       debug(e);
       toTelegram('Ошибка при проверке лимитов торговли. Ордер не отправлен.').then();
@@ -254,7 +334,10 @@ const initOrders = async (triggeredObject) => {
       }).then(res => {
         logify(res, 'send_order_response');
         handleSendOrderResponse(deal, res);
-      });
+      })
+        .catch(e => {
+          handleSendOrderError(deal, e);
+        });
     }
     if (order_type === 'market') {
       connection.marketOrder({
@@ -264,7 +347,10 @@ const initOrders = async (triggeredObject) => {
       }).then(res => {
         logify(res, 'send_order_response');
         handleSendOrderResponse(deal, res);
-      });
+      })
+        .catch(e => {
+          handleSendOrderError(deal, e);
+        });
     }
   })
 }

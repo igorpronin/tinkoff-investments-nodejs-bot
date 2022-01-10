@@ -1,6 +1,7 @@
 const store = {
   stocksRaw: null,
   currenciesRaw: null,
+  availableCurrenciesList: ['USDRUBTOM', 'EURRUBTOM'],
   activeStocksByTicker: {},
   activeStocksByFigi: {},
   tickersList: null,
@@ -20,14 +21,16 @@ const store = {
       price: null, // last price in candles or mid(best_bed, best_ask)
       best_bid: null,
       best_ask: null,
-      trade_status: null
+      trade_status: null,
+      deals: []
     },
     EUR: {
       figi: 'BBG0013HJJ31',
       price: null, // last price in candles or mid(best_bed, best_ask)
       best_bid: null,
       best_ask: null,
-      trade_status: null
+      trade_status: null,
+      deals: []
     }
   }
 }

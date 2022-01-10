@@ -18,6 +18,20 @@ const createTableDeals = () => {
   db.run(sql, handleErr);
 }
 
+const addColsTypeAndIsLimitedToDeals = () => {
+  const handleErr = () => {}
+  const sql = `
+    ALTER TABLE deals
+    ADD COLUMN type TEXT;
+  `;
+  const sql2 = `
+    ALTER TABLE deals
+    ADD COLUMN is_limited INTEGER;
+  `;
+  db.run(sql, handleErr);
+  db.run(sql2, handleErr);
+}
+
 const createTableSettings = () => {
   const handleErr = () => {}
   const sql = `CREATE TABLE IF NOT EXISTS settings (
@@ -28,12 +42,12 @@ const createTableSettings = () => {
   db.run(sql, handleErr);
 }
 
-const addMockData = () => {
-  // insertDeal('GAZP', 'Sell', 490, 'limit', 489, 1);
-  // insertDeal('GAZP', 'Buy', 280, 'limit', 281, 1);
-}
+// const addMockData = () => {
+//   // insertDeal('GAZP', 'Sell', 490, 'limit', 489, 1);
+//   // insertDeal('GAZP', 'Buy', 280, 'limit', 281, 1);
+// }
 
-const insertDeal = ({ticker, direction, trigger_price, order_type, order_price, lots}) => {
+const insertDeal = ({ticker, direction, trigger_price, order_type, order_price, lots, type, is_limited}) => {
   return new Promise(resolve => {
     try {
       const handleErr = (e) => {
@@ -44,11 +58,11 @@ const insertDeal = ({ticker, direction, trigger_price, order_type, order_price, 
         resolve(true)
       };
       const sql = `
-        INSERT INTO deals (id, ticker, direction, trigger_price, order_type, order_price, lots, is_executed) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+        INSERT INTO deals (id, ticker, direction, trigger_price, order_type, order_price, lots, is_executed, type, is_limited) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
       `;
       const stmt = db.prepare(sql);
-      const values = [v4(), ticker, direction, trigger_price, order_type, order_price, lots, 0];
+      const values = [v4(), ticker, direction, trigger_price, order_type, order_price, lots, 0, type, is_limited];
       stmt.run(values, handleErr);
       stmt.finalize();
     } catch (e) {
@@ -125,7 +139,7 @@ const deleteExecutedDeals = () => {
 }
 
 const markDealAsExecuted = (id) => {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const handler = (e) => {
       if (e) {
         debug(e);
@@ -142,7 +156,7 @@ const markDealAsExecuted = (id) => {
 }
 
 const setSettingVal = (key, val) => {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const handler = (e) => {
       if (e) {
         debug(e);
@@ -159,7 +173,7 @@ const setSettingVal = (key, val) => {
 }
 
 const getAllDeals = () => {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const sql = `SELECT * FROM deals;`;
       db.all(sql, (err, result) => {
       if (err || !result.length) resolve(null);
@@ -169,7 +183,7 @@ const getAllDeals = () => {
 }
 
 const getSettingByKey = (key) => {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const handler = (e, data) => {
       if (e) {
         debug(e);
@@ -207,6 +221,7 @@ const getOrdersLimitSum = async (direction) => {
 const dbActions = async () => {
   createTableDeals();
   createTableSettings();
+  addColsTypeAndIsLimitedToDeals();
   const f1 = async () => {
     const r1 = await getSettingByKey('active_acc');
     if (!r1) await insertSettings({key: 'active_acc', value: null});

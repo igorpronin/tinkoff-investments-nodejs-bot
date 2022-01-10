@@ -6,6 +6,8 @@ const {getAllDeals, insertDeal, deleteDeal, deleteExecutedDeals, setSettingVal} 
 const {noDealsMes} = require('./main');
 const {setCurrentAccount, getCandlesLast7Days} = require('./api');
 
+const {availableCurrenciesList} = store;
+
 // const handleLoadAccounts = async () => {
 //   start();
 //   const accounts = await getAccounts(connection);
@@ -95,113 +97,113 @@ const deleteExecuted = async () => {
   else {toScreen('Ошибка при удалении сделок.', 'e');}
 }
 
-const handleAddDeal = async () => {
-  toScreen('Добавление сделки...', 'w');
-  const params = {order_price: null};
-  const askTicker = async () => {
-    const q1 = [
-      {
-        type: 'input',
-        name: 'ticker',
-        message: 'Тикер'
-      }
-    ]
-    let {ticker} = await inquirer.prompt(q1);
-    ticker = ticker.toUpperCase();
-    if (!store.tickersList.includes(ticker)) {
-      toScreen(`Тикера ${ticker} нет в списке доступных для торговли. Укажите другой.`, 'w');
-      ticker = await askTicker();
+const askTicker = async () => {
+  const q1 = [
+    {
+      type: 'input',
+      name: 'ticker',
+      message: 'Тикер акции или расписки, "USDRUBTOM", "EURRUBTOM" для сделок с USD, EUR'
     }
-    return ticker;
+  ]
+  let {ticker} = await inquirer.prompt(q1);
+  ticker = ticker.toUpperCase();
+  if (!(store.tickersList.includes(ticker) || availableCurrenciesList.includes(ticker))) {
+    toScreen(`Тикера ${ticker} нет в списке доступных для торговли. Укажите другой.`, 'w');
+    ticker = await askTicker();
   }
-  const askDirection = async () => {
-    const q1 = [
-      {
-        type: 'list',
-        name: 'direction',
-        message: 'Направление',
-        choices: [
-          {
-            value: 'Buy',
-            name: 'Купить'
-          },
-          {
-            value: 'Sell',
-            name: 'Продать'
-          }
-        ]
-      }
-    ]
-    let {direction} = await inquirer.prompt(q1);
-    return direction;
-  }
-  const askTriggerPrice = async () => {
-    const q1 = [
-      {
-        type: 'number',
-        name: 'trigger_price',
-        message: 'Цена актива, при достижении которой создастся ордер',
-      }
-    ]
-    let {trigger_price} = await inquirer.prompt(q1);
-    if (Number(trigger_price) > 0) {
-      return trigger_price;
+  return ticker;
+}
+const askDirection = async () => {
+  const q1 = [
+    {
+      type: 'list',
+      name: 'direction',
+      message: 'Направление',
+      choices: [
+        {
+          value: 'Buy',
+          name: 'Купить'
+        },
+        {
+          value: 'Sell',
+          name: 'Продать'
+        }
+      ]
     }
-    toScreen(`Укажите положительное число.`, 'w');
-    return await askTriggerPrice();
-  }
-  const askOrderType = async () => {
-    const q1 = [
-      {
-        type: 'list',
-        name: 'order_type',
-        message: 'Тип ордера',
-        choices: [
-          {
-            value: 'limit',
-            name: 'Лимитный'
-          },
-          {
-            value: 'market',
-            name: 'Рыночный'
-          }
-        ]
-      }
-    ]
-    let {order_type} = await inquirer.prompt(q1);
-    return order_type;
-  }
-  const askOrderPrice = async () => {
-    const q1 = [
-      {
-        type: 'number',
-        name: 'order_price',
-        message: 'Цена ордера',
-      }
-    ]
-    let {order_price} = await inquirer.prompt(q1);
-    if (Number(order_price) > 0) {
-      return order_price;
+  ]
+  let {direction} = await inquirer.prompt(q1);
+  return direction;
+}
+const askTriggerPrice = async () => {
+  const q1 = [
+    {
+      type: 'number',
+      name: 'trigger_price',
+      message: 'Цена актива, при достижении которой создастся ордер',
     }
-    toScreen(`Укажите положительное число.`, 'w');
-    return await askOrderPrice();
+  ]
+  let {trigger_price} = await inquirer.prompt(q1);
+  if (Number(trigger_price) > 0) {
+    return trigger_price;
   }
-  const askLots = async () => {
-    const q1 = [
-      {
-        type: 'number',
-        name: 'lots',
-        message: 'Количество лотов',
-      }
-    ]
-    let {lots} = await inquirer.prompt(q1);
-    if (Number(lots) > 0 && Number.isInteger(lots)) {
-      return lots;
+  toScreen(`Укажите положительное число.`, 'w');
+  return await askTriggerPrice();
+}
+const askOrderType = async () => {
+  const q1 = [
+    {
+      type: 'list',
+      name: 'order_type',
+      message: 'Тип ордера',
+      choices: [
+        {
+          value: 'limit',
+          name: 'Лимитный'
+        },
+        {
+          value: 'market',
+          name: 'Рыночный'
+        }
+      ]
     }
-    toScreen(`Укажите положительное целое число.`, 'w');
-    return await askLots();
+  ]
+  let {order_type} = await inquirer.prompt(q1);
+  return order_type;
+}
+const askOrderPrice = async () => {
+  const q1 = [
+    {
+      type: 'number',
+      name: 'order_price',
+      message: 'Цена ордера',
+    }
+  ]
+  let {order_price} = await inquirer.prompt(q1);
+  if (Number(order_price) > 0) {
+    return order_price;
   }
-  params.ticker = await askTicker();
+  toScreen(`Укажите положительное число.`, 'w');
+  return await askOrderPrice();
+}
+const askLots = async () => {
+  const q1 = [
+    {
+      type: 'number',
+      name: 'lots',
+      message: 'Количество лотов',
+    }
+  ]
+  let {lots} = await inquirer.prompt(q1);
+  if (Number(lots) > 0 && Number.isInteger(lots)) {
+    return lots;
+  }
+  toScreen(`Укажите положительное целое число.`, 'w');
+  return await askLots();
+}
+
+const addStockDeal = async (params) => {
+  params.type = 'stock';
+  params.is_limited = 1;
   const asset = store.stocksRaw.instruments.find(item => item.ticker === params.ticker);
   const candles = await getCandlesLast7Days(asset.figi);
   params.price = candles[candles.length - 1].c;
@@ -242,7 +244,52 @@ const handleAddDeal = async () => {
   if (params.order_type === 'limit') {
     params.order_price = await askOrderPrice();
   }
-  const result = await insertDeal(params);
+  return await insertDeal(params);
+}
+
+const addCurrencyDeal = async (params) => {
+  params.type = 'currency';
+  params.is_limited = 0;
+  if (params.ticker === 'USDRUBTOM') {
+    params.price = store.currencies.USD.price;
+  }
+  if (params.ticker === 'EURRUBTOM') {
+    params.price = store.currencies.EUR.price;
+  }
+  let m1 = `Выбрано: ${params.ticker} | В лоте шт.: 1000`;
+  if (params.price) {
+    m1 += ` | Цена: ${params.price.toFixed(2)} RUB (за лот ${(params.price * 1000).toFixed(2)})`;
+  }
+  toScreen(m1, 'w');
+  params.direction = await askDirection();
+  params.lots = await askLots();
+  if (params.price) {
+    const price = params.price * 1000 * params.lots;
+    let m2 = `Сумма сделки по текущей цене: ${price.toFixed(2)} RUB`;
+    toScreen(m2, 'w');
+  }
+  params.trigger_price = await askTriggerPrice();
+  const goalPrice = params.trigger_price * 1000 * params.lots;
+  let m3 = `Сумма сделки по целевой цене: ${goalPrice.toFixed(2)} RUB`;
+  toScreen(m3, 'w');
+  params.order_type = await askOrderType();
+  if (params.order_type === 'limit') {
+    params.order_price = await askOrderPrice();
+  }
+  toScreen('Внимание! Сделки по валютам не ограничены установленным лимитом покупок/продаж.', 'w');
+  return await insertDeal(params);
+}
+
+const handleAddDeal = async () => {
+  toScreen('Добавление сделки...', 'w');
+  const params = {order_price: null};
+  params.ticker = await askTicker();
+  let result;
+  if (availableCurrenciesList.includes(params.ticker)) {
+    result = await addCurrencyDeal(params);
+  } else {
+    result = await addStockDeal(params);
+  }
   if (result) {
     toScreen(`Сделка по тикеру ${params.ticker} добавлена.`, 's');
     return true;
@@ -250,6 +297,8 @@ const handleAddDeal = async () => {
   toScreen('Ошибка при добавлении сделки.', 'e');
   return null;
 }
+
+
 
 const setAcc = async () => {
   toScreen('Установка счета для торговли...', 'w');
