@@ -2,26 +2,14 @@ require('dotenv').config();
 const inquirer = require('inquirer');
 const {debug, toScreen} = require('./utils');
 const store = require('./store');
-const connection = require('./connection');
 const {getAllDeals, insertDeal, deleteDeal, deleteExecutedDeals, setSettingVal} = require('./db');
 const {noDealsMes} = require('./main');
-const moment = require('moment');
-const {setCurrentAccount} = require('./api');
-
-const start = () => {
-  toScreen('Выполнение...');
-}
+const {setCurrentAccount, getCandlesLast7Days} = require('./api');
 
 // const handleLoadAccounts = async () => {
 //   start();
 //   const accounts = await getAccounts(connection);
 //   await saveAccounts(accounts);
-// }
-//
-// const handleLoadPortfolio = async () => {
-//   start();
-//   const portfolio = await getPortfolio(connection);
-//   await savePortfolio(portfolio);
 // }
 //
 // const handleLoadOrders = async () => {
@@ -215,31 +203,40 @@ const handleAddDeal = async () => {
   }
   params.ticker = await askTicker();
   const asset = store.stocksRaw.instruments.find(item => item.ticker === params.ticker);
-  try {
-    const {candles} = await connection.candlesGet({
-      figi: asset.figi,
-      interval: 'day',
-      from: moment().subtract(7, 'd').format(),
-      to: moment().format(),
-    });
-    params.price = candles[candles.length - 1].c;
-  } catch {}
+  const candles = await getCandlesLast7Days(asset.figi);
+  params.price = candles[candles.length - 1].c;
   let m1 = `Выбрано: ${params.ticker}, ${asset.name} | В лоте шт.: ${asset.lot} | Валюта: ${asset.currency}`;
   if (params.price) {
-    m1 += ` | Цена: ${params.price.toFixed(2)}`
-  }
-  if (asset.lot > 1) {
-    m1 += ` (за лот ${(params.price * asset.lot).toFixed(2)})`;
+    m1 += ` | Цена: ${params.price.toFixed(2)} ${asset.currency}`;
+    if (asset.currency === 'USD' || asset.currency === 'EUR') {
+      m1 += ` (${(params.price * store.currencies[asset.currency].price).toFixed(2)} RUB)`
+    }
+    if (asset.lot > 1) {
+      const lotPrice = params.price * asset.lot;
+      m1 += ` (за лот ${lotPrice.toFixed(2)}`;
+      if (asset.currency === 'USD' || asset.currency === 'EUR') {
+        m1 += `, ${(lotPrice * store.currencies[asset.currency].price).toFixed(2)} RUB`
+      }
+      m1 += ')';
+    }
   }
   toScreen(m1, 'w');
   params.direction = await askDirection();
   params.lots = await askLots();
   if (params.price) {
-    let m2 = `Сумма сделки по текущей цене: ${(params.price * asset.lot * params.lots).toFixed(2)} ${asset.currency}`;
+    const price = params.price * asset.lot * params.lots;
+    let m2 = `Сумма сделки по текущей цене: ${price.toFixed(2)} ${asset.currency}`;
+    if (asset.currency === 'USD' || asset.currency === 'EUR') {
+      m2 += ` (${(price * store.currencies[asset.currency].price).toFixed(2)} RUB)`
+    }
     toScreen(m2, 'w');
   }
   params.trigger_price = await askTriggerPrice();
-  let m3 = `Сумма сделки по целевой цене: ${(params.trigger_price * asset.lot * params.lots).toFixed(2)} ${asset.currency}`;
+  const goalPrice = params.trigger_price * asset.lot * params.lots;
+  let m3 = `Сумма сделки по целевой цене: ${goalPrice.toFixed(2)} ${asset.currency}`;
+  if (asset.currency === 'USD' || asset.currency === 'EUR') {
+    m3 += ` (${(goalPrice * store.currencies[asset.currency].price).toFixed(2)} RUB)`
+  }
   toScreen(m3, 'w');
   params.order_type = await askOrderType();
   if (params.order_type === 'limit') {
@@ -278,6 +275,55 @@ const setAcc = async () => {
   toScreen(`Активный счет ${accID} установлен.`, 's');
 }
 
+const setLimits = async () => {
+  toScreen('Установка лимитов на покупку/продажу, в рублях, за одну сессию...', 'w');
+  const q1 = [
+    {
+      type: 'list',
+      name: 'direction',
+      message: 'Направление ордеров.',
+      choices: [
+        {
+          value: 'max_buy_sum',
+          name: 'Лимиты покупок'
+        },
+        {
+          value: 'max_sell_sum',
+          name: 'Лимиты продаж'
+        }
+      ]
+    }
+  ]
+  const {direction} = await inquirer.prompt(q1);
+  const askSum = async () => {
+    const q2 = [
+      {
+        type: 'number',
+        name: 'sum',
+        message: 'Введите сумму',
+      }
+    ]
+    let {sum} = await inquirer.prompt(q2);
+    if (Number(sum) > 0 && Number.isInteger(sum)) {
+      return sum;
+    }
+    toScreen(`Укажите положительное целое число.`, 'w');
+    return await askSum();
+  }
+  const sum = await askSum();
+  await setSettingVal(direction, sum);
+  let mes;
+  if (direction === 'max_buy_sum') {
+    store.ordersActivateLimit.Buy = sum;
+    mes = `Лимит покупок установлен. Текущий лимит покупок: ${sum} RUB.`;
+  }
+  if (direction === 'max_sell_sum') {
+    store.ordersActivateLimit.Sell = sum;
+    mes = `Лимит продаж установлен. Текущий лимит продаж: ${sum} RUB.`;
+  }
+  toScreen(mes, 's');
+}
+
 const handleAction = async (answer) => {
   switch (answer) {
     case 'deals':
@@ -298,6 +344,10 @@ const handleAction = async (answer) => {
       break;
     case 'set_acc':
       await setAcc();
+      await ask();
+      break;
+    case 'set_limits':
+      await setLimits();
       await ask();
       break;
     case 'close':
@@ -332,6 +382,10 @@ const ask = async () => {
       {
         name: 'Выбрать счет для торговли',
         value: 'set_acc'
+      },
+      {
+        name: 'Установить органичения сумм сделок',
+        value: 'set_limits'
       },
       {
         name: 'Завершить',

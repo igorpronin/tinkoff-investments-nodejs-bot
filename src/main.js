@@ -1,9 +1,7 @@
 require('dotenv').config();
 const {toTelegram} = require('./telegram');
-const {toScreen} = require('./utils');
+const {debug, toScreen} = require('./utils');
 const connection = require('./connection');
-// const winston = require('winston');
-// const moment = require('moment');
 const {getAllDeals, markDealAsExecuted} = require('./db');
 const store = require('./store');
 const {logify} = require('./logger');
@@ -42,6 +40,65 @@ const prepare = async () => {
     process.exit(1);
   }
   fillStocks(deals);
+}
+
+const instrumentInfoStreamHandler = async (data) => {
+  handleInstrumentInfoStreamData(data);
+  logify(data, 'instrumentInfo');
+}
+
+const orderBookStreamHandler = async (data) => {
+  const asset = handleOrderBookStreamData(data);
+  if (asset) {
+    const triggeredObject = checkDeals(asset);
+    if (triggeredObject) {
+      await initOrders(triggeredObject);
+    }
+  }
+  logify(data, 'orderbook');
+}
+
+const orderBookStreamCurrencyHandler = (data) => {
+  const {figi, bids, asks} = data;
+  let best_bid, best_ask;
+  if (bids && bids.length) {
+    best_bid = bids[0]?.[0];
+  }
+  if (asks && asks.length) {
+    best_ask = asks[0]?.[0];
+  }
+  if (figi === 'BBG0013HGFT4') { // UDS
+    if (best_bid && best_ask) {
+      store.currencies.USD.price = (best_bid + best_ask) / 2;
+    }
+    if (best_bid) {
+      store.currencies.USD.best_bid = best_bid;
+    }
+    if (best_ask) {
+      store.currencies.USD.best_ask = best_ask;
+    }
+  }
+  if (figi === 'BBG0013HJJ31') { // EUR
+    if (best_bid && best_ask) {
+      store.currencies.EUR.price = (best_bid + best_ask) / 2;
+    }
+    if (best_bid) {
+      store.currencies.EUR.best_bid = best_bid;
+    }
+    if (best_ask) {
+      store.currencies.EUR.best_ask = best_ask;
+    }
+  }
+}
+
+const instrumentInfoStreamCurrencyHandler = (data) => {
+  const {figi, trade_status} = data;
+  if (figi === 'BBG0013HGFT4') { // UDS
+    store.currencies.USD.trade_status = trade_status;
+  }
+  if (figi === 'BBG0013HJJ31') { // EUR
+    store.currencies.EUR.trade_status = trade_status;
+  }
 }
 
 // Returns changed asset or null if something went wrong
@@ -127,10 +184,41 @@ const checkDeals = (asset) => {
       asset,
       triggered: triggeredDeals
     }
-    logify(result, 'deal_triggered');
+    logify(result, 'deals_triggered');
     return result;
   }
   return null;
+}
+
+// returns true если лимит исчерпан
+const checkLimits = (deal, asset) => {
+  const {best_bid, best_ask, meta} = asset;
+  const {lot, currency} = meta;
+  const {id, direction, lots} = deal;
+  let dealSumRUB;
+  if (direction === 'Sell') {
+    dealSumRUB = best_bid * lot * lots;
+  }
+  if (direction === 'Buy') {
+    dealSumRUB = best_ask * lot * lots;
+  }
+  if (currency !== 'RUB') {
+    dealSumRUB = dealSumRUB * store.currencies[currency].price;
+  }
+  if (direction === 'Sell') {
+    if (store.ordersActivateLimit.Sell && store.sumOrdersSellActivatedRUB + dealSumRUB > store.ordersActivateLimit.Sell) {
+      toTelegram('Установленный лимит продаж не позволяет отправить ордер. Ордер не отправлен.').then();
+      return true;
+    }
+    store.sumOrdersSellActivatedRUB = store.sumOrdersSellActivatedRUB + dealSumRUB;
+  }
+  if (direction === 'Buy') {
+    if (store.ordersActivateLimit.Buy && store.sumOrdersBuyActivatedRUB + dealSumRUB > store.ordersActivateLimit.Buy) {
+      toTelegram(`Установленный лимит покупок не позволяет отправить ордер по сделке ${id}. Ордер не отправлен.`).then();
+      return true;
+    }
+    store.sumOrdersBuyActivatedRUB = store.sumOrdersBuyActivatedRUB + dealSumRUB;
+  }
 }
 
 const handleSendOrderResponse = (deal, responseObj) => {
@@ -149,6 +237,14 @@ const initOrders = async (triggeredObject) => {
   const {figi} = asset.meta;
   triggered.forEach(deal => {
     const {direction, order_type, order_price, lots} = deal;
+    try {
+      const isLimit = checkLimits(deal, asset);
+      if (isLimit) return;
+    } catch (e) {
+      debug(e);
+      toTelegram('Ошибка при проверке лимитов торговли. Ордер не отправлен.').then();
+      return;
+    }
     if (order_type === 'limit') {
       connection.limitOrder({
         figi,
@@ -181,22 +277,18 @@ const runMain = async () => {
     if (store.activeStocksByTicker.hasOwnProperty(key)) {
       const asset = store.activeStocksByTicker[key];
       const {meta} = asset;
-      connection.instrumentInfo({figi: meta.figi}, (data) => {
-        handleInstrumentInfoStreamData(data);
-        logify(data, 'instrumentInfo');
-      });
+      connection.instrumentInfo({figi: meta.figi}, instrumentInfoStreamHandler);
       asset.subscriptions.push('instrumentInfo');
-      connection.orderbook({figi: meta.figi}, async (data) => {
-        const asset = handleOrderBookStreamData(data);
-        if (asset) {
-          const triggeredObject = checkDeals(asset);
-          if (triggeredObject) {
-            await initOrders(triggeredObject);
-          }
-        }
-        logify(data, 'orderbook');
-      });
+      connection.orderbook({figi: meta.figi}, orderBookStreamHandler);
       asset.subscriptions.push('orderbook');
+    }
+  }
+  for (let key in store.currencies) {
+    if (store.currencies.hasOwnProperty(key)) {
+      const currency = store.currencies[key];
+      const {figi} = currency;
+      connection.instrumentInfo({figi}, instrumentInfoStreamCurrencyHandler);
+      connection.orderbook({figi}, orderBookStreamCurrencyHandler);
     }
   }
 }

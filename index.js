@@ -7,10 +7,10 @@ const inquirer = require('inquirer');
 const {ask: configure} = require('./src/configure');
 const {runMain} = require('./src/main');
 const {
-  getAndSaveStocks, getAndSaveAccounts, getAndSavePortfolio,
-  setCurrentAccount, getAndSavePortfolioCurrencies
+  getAndSaveStocks, getAndSaveAccounts, getAndSavePortfolio, getInitialCurrencyPrices,
+  setCurrentAccount, getAndSavePortfolioCurrencies, getAndSaveCurrencies
 } = require('./src/api');
-const {getSettingByKey, setSettingVal} = require('./src/db');
+const {getSettingByKey, setSettingVal, getOrdersLimitSum} = require('./src/db');
 const store = require('./src/store');
 
 const args = {};
@@ -81,6 +81,12 @@ const getStocks = async () => {
   toScreen('Список доступных акций обновлен.');
 }
 
+const getCurrencies = async () => {
+  toScreen('Обновляется список доступных валютных инструментов...');
+  store.currenciesRaw = await getAndSaveCurrencies();
+  toScreen('Список доступных валютных инструментов обновлен.');
+}
+
 const getAccounts = async () => {
   toScreen('Запрашивается список счетов...');
   const {accounts} = await getAndSaveAccounts();
@@ -89,17 +95,45 @@ const getAccounts = async () => {
 }
 
 const getPortfolioByAccount = async (accID) => {
-  toScreen(`Запрашивается портфель по аккаунту ${accID}...`);
+  toScreen(`Запрашивается портфель по счету ${accID}...`);
   const {positions} = await getAndSavePortfolio(accID);
   store.portfolio[accID] = positions;
-  toScreen(`Портфель получен по аккаунту ${accID}.`);
+  toScreen(`Портфель получен по счету ${accID}.`);
 }
 
 const getPortfolioCurrenciesByAccount = async (accID) => {
-  toScreen(`Запрашиваются валюты по аккаунту ${accID}...`);
+  toScreen(`Запрашиваются валюты по счету ${accID}...`);
   const {currencies} = await getAndSavePortfolioCurrencies(accID);
   store.portfolioCurrencies[accID] = currencies;
-  toScreen(`Валюты получены по аккаунту ${accID}.`);
+  toScreen(`Валюты получены по счету ${accID}.`);
+}
+
+const fillInitialCurrencyPrices = async () => {
+  toScreen(`Запрашиваются цены валют...`);
+  try {
+    const {USD, EUR} = await getInitialCurrencyPrices();
+    store.currencies.USD.price = USD;
+    store.currencies.EUR.price = EUR;
+    toScreen(`Цены валют получены.`);
+  } catch (e) {
+    debug(e);
+    toScreen('Ошибка при запросе цен валют.', 'e');
+  }
+}
+
+const fillLimits = async () => {
+  await Promise.all([
+    getOrdersLimitSum('Buy').then(({value}) => {
+      if (value) {
+        store.ordersActivateLimit.Buy = Number(value);
+      }
+    }),
+    await getOrdersLimitSum('Sell').then(({value}) => {
+      if (value) {
+        store.ordersActivateLimit.Sell = Number(value);
+      }
+    })
+  ])
 }
 
 const showActiveAcc = () => {
@@ -123,10 +157,28 @@ const showActiveAcc = () => {
   if (!emptyMes2) toScreen(mes2, 'w');
 }
 
+const showLimits = () => {
+  if (store.ordersActivateLimit.Sell || store.ordersActivateLimit.Buy) {
+    const limits = [];
+    if (store.ordersActivateLimit.Buy) {
+      limits.push(`на покупку ${store.ordersActivateLimit.Buy} RUB`)
+    }
+    if (store.ordersActivateLimit.Sell) {
+      limits.push(`на продажу ${store.ordersActivateLimit.Sell} RUB`)
+    }
+    const str = limits.join(', ');
+    let mes = `Текущие лимиты сделок: ${str}`;
+    toScreen(mes, 'w');
+  }
+}
+
 const run = async () => {
   await Promise.all([
     getStocks(),
     getAccounts(),
+    getCurrencies(),
+    fillInitialCurrencyPrices(),
+    fillLimits()
   ]);
   for (let i = 0; i < store.accounts.length; i++) {
     const accID = store.accounts[i].brokerAccountId;
@@ -146,6 +198,7 @@ const run = async () => {
   }
   setCurrentAccount(store.activeAcc);
   showActiveAcc();
+  showLimits();
   if ((process.env.FORCE_START === '1' && args.F !== '0') || args.F === '1') {
     await runMain();
   } else {

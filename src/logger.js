@@ -19,22 +19,23 @@ const logger = winston.createLogger({
   transports: [transportError, transportCombined],
 });
 
-const logify = (data, meta) => {
-  if (data) {
+const logify = (data, metaMessage, level = 'info') => {
+  let message;
+  if (data && data instanceof Error) {
+    message = data.stack;
+  } else if (data) {
     const {figi} = data;
     if (figi) {
       const asset = store.activeStocksByFigi[figi];
       if (asset) data.ticker = asset.meta.ticker;
     }
+    message = JSON.stringify(data);
   }
-  const time = moment();
-  data.time = time.toISOString();
-  // toConsole(time, data);
-  logger.log({
-    level: 'info',
-    message: JSON.stringify(data),
-    meta
-  });
+  const meta = JSON.stringify({
+    i: metaMessage,
+    date: moment().toISOString()
+  })
+  logger.log({level, message, meta});
 }
 
 module.exports = {logify}

@@ -3,11 +3,12 @@ const fs = require('fs');
 const {debug, toScreen} = require('./utils');
 const root = require('app-root-path');
 const connection = require('./connection');
+const moment = require('moment');
 
-const dir = 'data';
+const DEFAULT_DATA_DIR = `${root}/data/`;
 
-if (!fs.existsSync(dir)) {
-  fs.mkdirSync(dir);
+if (!fs.existsSync(DEFAULT_DATA_DIR)) {
+  fs.mkdirSync(DEFAULT_DATA_DIR);
 }
 
 const errMes = 'Ошибка при операции';
@@ -37,9 +38,36 @@ const saveFile = async (path, data, silent = false) => {
   })
 }
 
+const saveDataToFile = async ({data, filename, postfix, dir, silent}) => {
+  try {
+    let directory = dir ? dir : DEFAULT_DATA_DIR;
+    const str = JSON.stringify(data, null, 2);
+    let name = filename;
+    if (postfix) {
+      let parts = filename.split('.');
+      if (parts.length !== 2) throw 'Ошибка в имени файла.';
+      const ext = parts[parts.length - 1];
+      name = `${parts[0]}_${postfix}.${ext}`;
+    }
+    if (str) await saveFile(`${directory}${name}`, str, silent);
+  } catch (e) {
+    toScreen(errMes, 'e');
+    debug(e);
+  }
+}
+
 const getStocks = async (connection) => {
   try {
     return await connection.stocks();
+  } catch (e) {
+    toScreen(errMes, 'e');
+    debug(e);
+  }
+}
+
+const getCurrencies = async (connection) => {
+  try {
+    return await connection.currencies();
   } catch (e) {
     toScreen(errMes, 'e');
     debug(e);
@@ -82,46 +110,6 @@ const getOrders = async (connection) => {
   }
 }
 
-const saveStocks = async (stocks, silent = false) => {
-  try {
-    const str = JSON.stringify(stocks, null, 2);
-    if (str) await saveFile(`${root}/data/stocks.json`, str, silent);
-  } catch (e) {
-    toScreen(errMes, 'e');
-    debug(e);
-  }
-}
-
-const saveAccounts = async (accounts) => {
-  try {
-    const str = JSON.stringify(accounts, null, 2);
-    if (str) await saveFile(`${root}/data/accounts.json`, str, true);
-  } catch (e) {
-    toScreen(errMes, 'e');
-    debug(e);
-  }
-}
-
-const savePortfolio = async (portfolio, accID) => {
-  try {
-    const str = JSON.stringify(portfolio, null, 2);
-    if (str) await saveFile(`${root}/data/portfolio_${accID}.json`, str, true);
-  } catch (e) {
-    toScreen(errMes, 'e');
-    debug(e);
-  }
-}
-
-const savePortfolioCurrencies = async (data, accID) => {
-  try {
-    const str = JSON.stringify(data, null, 2);
-    if (str) await saveFile(`${root}/data/currencies_${accID}.json`, str, true);
-  } catch (e) {
-    toScreen(errMes, 'e');
-    debug(e);
-  }
-}
-
 const saveOrders = async (orders) => {
   try {
     const str = JSON.stringify(orders, null, 2);
@@ -133,27 +121,52 @@ const saveOrders = async (orders) => {
 }
 
 const getAndSaveAccounts = async () => {
-  const accounts = await getAccounts(connection);
-  await saveAccounts(accounts);
-  return accounts;
+  const data = await getAccounts(connection);
+  await saveDataToFile({data, filename: 'accounts.json', silent: true});
+  return data;
 }
 
 const getAndSavePortfolio = async (accID) => {
-  const portfolio = await getPortfolio(connection);
-  await savePortfolio(portfolio, accID);
-  return portfolio;
+  const data = await getPortfolio(connection);
+  await saveDataToFile({data, filename: 'portfolio.json', postfix: accID, silent: true});
+  return data;
 }
 
 const getAndSavePortfolioCurrencies = async (accID) => {
-  const currencies = await getPortfolioCurrencies(connection);
-  await savePortfolioCurrencies(currencies, accID);
-  return currencies;
+  const data = await getPortfolioCurrencies(connection);
+  await saveDataToFile({data, filename: 'currencies.json', postfix: accID, silent: true});
+  return data;
 }
 
 const getAndSaveStocks = async () => {
-  const stocks = await getStocks(connection);
-  await saveStocks(stocks, true);
-  return stocks;
+  const data = await getStocks(connection);
+  await saveDataToFile({data, filename: 'stocks.json', silent: true})
+  return data;
+}
+
+const getAndSaveCurrencies = async () => {
+  const data = await getCurrencies(connection);
+  await saveDataToFile({data, filename: 'currencies.json', silent: true})
+  return data;
+}
+
+const getInitialCurrencyPrices = async () => {
+  return new Promise(resolve => {
+    let EUR, USD;
+    Promise.all([
+      getCandlesLast7Days('BBG0013HJJ31').then(res => {EUR = res}),
+      getCandlesLast7Days('BBG0013HGFT4').then(res => {USD = res})
+    ])
+      .then(() => {
+        resolve({
+          EUR: EUR[EUR.length - 1].c,
+          USD: USD[USD.length - 1].c
+        })
+      })
+      .catch(() => {
+        resolve(null)
+      })
+  })
 }
 
 const getCurrentAccount = () => {
@@ -170,6 +183,20 @@ const setCurrentAccount = (accId) => {
   return getCurrentAccount();
 }
 
+const getCandlesLast7Days = async (figi) => {
+  try {
+    const {candles} = await connection.candlesGet({
+      figi,
+      interval: 'day',
+      from: moment().subtract(7, 'd').format(),
+      to: moment().format(),
+    });
+    return candles
+  } catch {
+    return null;
+  }
+}
+
 module.exports = {
   readFile,
   saveFile,
@@ -177,9 +204,6 @@ module.exports = {
   getAccounts,
   getPortfolio,
   getOrders,
-  saveStocks,
-  saveAccounts,
-  savePortfolio,
   saveOrders,
   getAndSaveStocks,
   getAndSaveAccounts,
@@ -187,4 +211,7 @@ module.exports = {
   getAndSavePortfolioCurrencies,
   getCurrentAccount,
   setCurrentAccount,
+  getCandlesLast7Days,
+  getAndSaveCurrencies,
+  getInitialCurrencyPrices
 }

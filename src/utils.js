@@ -1,5 +1,6 @@
 require('dotenv').config();
 const chalk = require('chalk');
+const {logify} = require('./logger');
 
 // level: 'w' | 'e' | 's'
 const toScreen = (message, level, prefix) => {
@@ -26,6 +27,15 @@ const debug = (any) => {
     console.log('[DEBUG]');
     console.log(any);
   }
+  if (any instanceof Error) {
+    handleError(any)
+  }
+}
+
+// level: c - critical
+const handleError = (error, level) => {
+  logify(error, 'error!', 'error');
+  if (level === 'c') process.exit(1);
 }
 
 module.exports = {

@@ -126,9 +126,9 @@ const deleteExecutedDeals = () => {
 
 const markDealAsExecuted = (id) => {
   return new Promise((resolve, reject) => {
-    const handler = (err) => {
-      if (err) {
-        console.log(err);
+    const handler = (e) => {
+      if (e) {
+        debug(e);
         resolve(null);
       }
       resolve(true);
@@ -143,9 +143,9 @@ const markDealAsExecuted = (id) => {
 
 const setSettingVal = (key, val) => {
   return new Promise((resolve, reject) => {
-    const handler = (err) => {
-      if (err) {
-        console.log(err);
+    const handler = (e) => {
+      if (e) {
+        debug(e);
         resolve(null);
       }
       resolve(true);
@@ -170,9 +170,9 @@ const getAllDeals = () => {
 
 const getSettingByKey = (key) => {
   return new Promise((resolve, reject) => {
-    const handler = (err, data) => {
-      if (err) {
-        console.log(err);
+    const handler = (e, data) => {
+      if (e) {
+        debug(e);
         resolve(null);
         return;
       }
@@ -189,11 +189,37 @@ const getSettingByKey = (key) => {
   })
 }
 
+// direction: Buy | Sell
+const getOrdersLimitSum = async (direction) => {
+  if (!(direction === 'Buy' || direction === 'Sell')) {
+    throw new Error();
+  }
+  let key;
+  if (direction === 'Buy') {
+    key = 'max_buy_sum';
+  }
+  if (direction === 'Sell') {
+    key = 'max_sell_sum';
+  }
+  return await getSettingByKey(key);
+}
+
 const dbActions = async () => {
   createTableDeals();
   createTableSettings();
-  const res = await getSettingByKey('active_acc');
-  if (!res) await insertSettings({key: 'active_acc', value: null});
+  const f1 = async () => {
+    const r1 = await getSettingByKey('active_acc');
+    if (!r1) await insertSettings({key: 'active_acc', value: null});
+  }
+  const f2 = async () => {
+    const r2 = await getSettingByKey('max_buy_sum');
+    if (!r2) await insertSettings({key: 'max_buy_sum', value: null});
+  }
+  const f3 = async () => {
+    const r3 = await getSettingByKey('max_sell_sum');
+    if (!r3) await insertSettings({key: 'max_sell_sum', value: null});
+  }
+  await Promise.all([f1(), f2(), f3]);
 }
 
 db.serialize(() => {
@@ -210,4 +236,5 @@ module.exports = {
   deleteExecutedDeals,
   setSettingVal,
   getSettingByKey,
+  getOrdersLimitSum
 };
