@@ -1,6 +1,6 @@
 {
   "name": "tinkoff-investments-nodejs-bot",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -20,6 +20,7 @@
     "axios": "^0.24.0",
     "chalk": "^4.0.0",
     "dotenv": "^10.0.0",
+    "get-folder-size": "^2.0.1",
     "inquirer": "^8.2.0",
     "moment": "^2.29.1",
     "node-cron": "^3.0.0",

@@ -2,7 +2,22 @@ require('dotenv').config();
 
 const {toScreen, debug} = require('./src/utils');
 const {version, name} = require('./package.json');
-toScreen(`${name}, version: ${version}`, 's');
+const moment = require('moment');
+const getSize = require('get-folder-size');
+const root = require('app-root-path');
+
+const getLogsSize = () => {
+  return new Promise((resolve, reject) => {
+    getSize(`${root}/logs`, (err, size) => {
+      if (err) reject(err);
+      resolve((size / 1024 / 1024).toFixed(2) + ' MB');
+    });
+  })
+}
+
+const startTime = moment().format('YYYY-MM-DD h:mm:ss a');
+toScreen(`${name}, version: ${version}, start time: ${startTime}`, 's');
+
 const inquirer = require('inquirer');
 const {ask: configure} = require('./src/configure');
 const {runMain} = require('./src/main');
@@ -173,6 +188,8 @@ const showLimits = () => {
 }
 
 const run = async () => {
+  const folderSize = await getLogsSize();
+  debug(`Размер директории с log-файлами: ${folderSize}`);
   await Promise.all([
     getStocks(),
     getAccounts(),
