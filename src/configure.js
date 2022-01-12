@@ -505,7 +505,7 @@ const ask = async () => {
         value: 'delete_deal'
       },
       {
-        name: 'Активизировать сделку',
+        name: 'Активировать сделку',
         value: 'reset_deal'
       },
       {
