@@ -2,7 +2,7 @@ require('dotenv').config();
 const inquirer = require('inquirer');
 const {debug, toScreen} = require('./utils');
 const store = require('./store');
-const {getAllDeals, insertDeal, deleteDeal, deleteExecutedDeals, setSettingVal} = require('./db');
+const {getAllDeals, insertDeal, deleteDeal, deleteExecutedDeals, setSettingVal, updateDealIsExecuted} = require('./db');
 const {noDealsMes} = require('./main');
 const {setCurrentAccount, getCandlesLast7Days} = require('./api');
 
@@ -96,7 +96,7 @@ const deleteOne = async () => {
     deals.forEach((deal, i)=> {
       const {id} = deal;
       const row = {
-        name: getDealMes(i, deal),
+        name: getDealMesAndSum(i, deal).mes,
         value: id
       }
       menu.choices.push(row);
@@ -113,11 +113,51 @@ const deleteOne = async () => {
         if (deals.length === 1) {
           toScreen('Сохраненных сделок больше нет.', 'w');
         } else {
-          toScreen('Можно удалить еще одну сделку.', 'w');
+          toScreen('Можно удалить другие сделки.', 'w');
           await deleteOne();
         }
       } else {
         toScreen('Ошибка при удалении сделки.', 'e');
+      }
+    }
+  } else {
+    toScreen(noDealsMes, 'w');
+  }
+}
+
+const resetOne = async () => {
+  const deals = await getAllDeals(true);
+  if (deals) {
+    const menu = {
+      type: 'list',
+      name: 'answer',
+      choices: []
+    };
+    deals.forEach((deal, i)=> {
+      const {id} = deal;
+      const row = {
+        name: getDealMesAndSum(i, deal).mes,
+        value: id
+      }
+      menu.choices.push(row);
+    })
+    menu.choices.push({
+      name: 'Назад',
+      value: 'end'
+    });
+    const {answer} = await inquirer.prompt([menu]);
+    if (answer !== 'end') {
+      const result = await updateDealIsExecuted(answer, 0);
+      if (result) {
+        toScreen('Сделка снова активна.', 's');
+        if (deals.length === 1) {
+          toScreen('Исполненных сделок больше нет, все сделки активны.', 'w');
+        } else {
+          toScreen('Можно сбросить другие сделки.', 'w');
+          await resetOne();
+        }
+      } else {
+        toScreen('Ошибка при сбросе сделки.', 'e');
       }
     }
   } else {
@@ -423,6 +463,10 @@ const handleAction = async (answer) => {
       await deleteOne();
       await ask();
       break;
+    case 'reset_deal':
+      await resetOne();
+      await ask();
+      break;
     case 'delete_executed_deals':
       await deleteExecuted();
       await ask();
@@ -459,6 +503,10 @@ const ask = async () => {
       {
         name: 'Удалить сделку',
         value: 'delete_deal'
+      },
+      {
+        name: 'Активизировать сделку',
+        value: 'reset_deal'
       },
       {
         name: 'Удалить исполненные сделки',

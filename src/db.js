@@ -148,7 +148,12 @@ const deleteExecutedDeals = () => {
   })
 }
 
-const markDealAsExecuted = (id) => {
+// flag: 0 | 1
+const updateDealIsExecuted = (id, flag) => {
+  if (!(flag === 0 || flag === 1)) {
+    debug(new Error());
+    process.exit(1);
+  }
   return new Promise((resolve) => {
     const handler = (e) => {
       if (e) {
@@ -157,9 +162,9 @@ const markDealAsExecuted = (id) => {
       }
       resolve(true);
     };
-    const sql = `UPDATE deals SET is_executed = 1 WHERE id = (?);`;
+    const sql = `UPDATE deals SET is_executed = (?) WHERE id = (?);`;
     const stmt = db.prepare(sql);
-    const values = [id];
+    const values = [flag, id];
     stmt.run(values, handler);
     stmt.finalize();
   })
@@ -182,9 +187,10 @@ const setSettingVal = (key, val) => {
   })
 }
 
-const getAllDeals = () => {
+const getAllDeals = (is_executed) => {
   return new Promise((resolve) => {
-    const sql = `SELECT * FROM deals;`;
+    let sql = `SELECT * FROM deals `;
+      is_executed ? sql += 'WHERE is_executed = 1;' : ';'
       db.all(sql, (err, result) => {
       if (err || !result.length) resolve(null);
       resolve(result);
@@ -255,7 +261,7 @@ db.serialize(() => {
 module.exports = {
   db,
   getAllDeals,
-  markDealAsExecuted,
+  updateDealIsExecuted,
   insertDeal,
   deleteDeal,
   deleteExecutedDeals,

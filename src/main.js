@@ -2,7 +2,7 @@ require('dotenv').config();
 const {toTelegram} = require('./telegram');
 const {debug, toScreen} = require('./utils');
 const connection = require('./connection');
-const {getAllDeals, markDealAsExecuted} = require('./db');
+const {getAllDeals, updateDealIsExecuted} = require('./db');
 const store = require('./store');
 const {logify} = require('./logger');
 
@@ -163,7 +163,7 @@ const handleDealExec = async (deal) => {
   }
   mes += `количество лотов: ${lots}\n`;
   deal.is_executed = true;
-  markDealAsExecuted(id).then();
+  updateDealIsExecuted(id, 1).then();
   toTelegram(mes).then();
 }
 
