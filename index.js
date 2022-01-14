@@ -19,7 +19,7 @@ const startTime = moment().format('YYYY-MM-DD h:mm:ss a');
 toScreen(`${name}, version: ${version}, start time: ${startTime}`, 's');
 
 const inquirer = require('inquirer');
-const {ask: configure} = require('./src/configure');
+const {ask: configure, showTotalsActive} = require('./src/configure');
 const {runMain} = require('./src/main');
 const {
   getAndSaveStocks, getAndSaveAccounts, getAndSavePortfolio, getInitialCurrencyPrices,
@@ -216,6 +216,7 @@ const run = async () => {
   setCurrentAccount(store.activeAcc);
   showActiveAcc();
   showLimits();
+  await showTotalsActive();
   if ((process.env.FORCE_START === '1' && args.F !== '0') || args.F === '1') {
     await runMain();
   } else {

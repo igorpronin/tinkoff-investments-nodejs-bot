@@ -36,44 +36,53 @@ const getDealMesAndSum = (i, deal) => {
   return {mes, sum: dealSum}
 }
 
+const showTotalsActive = async () => {
+  const deals = await getAllDeals();
+  const total = {
+    stocks: {
+      activeBuys: 0,
+      activeSells: 0
+    },
+    currencies: {
+      activeBuys: 0,
+      activeSells: 0
+    }
+  }
+  deals.forEach((deal, i) => {
+    const {is_executed, direction, type} = deal;
+    const {sum} = getDealMesAndSum(i, deal);
+    if (!is_executed) {
+      if (direction === 'Buy' && type === 'stock') {
+        total.stocks.activeBuys = total.stocks.activeBuys + sum;
+      }
+      if (direction === 'Sell' && type === 'stock') {
+        total.stocks.activeSells = total.stocks.activeSells + sum;
+      }
+      if (direction === 'Buy' && type === 'currency') {
+        total.currencies.activeBuys = total.currencies.activeBuys + sum;
+      }
+      if (direction === 'Sell' && type === 'currency') {
+        total.currencies.activeSells = total.currencies.activeSells + sum;
+      }
+    }
+  })
+  if (total.stocks.activeBuys) toScreen(`Сумма по активным сделкам на покупку акций: ${total.stocks.activeBuys.toFixed(2)} RUB`, 'w');
+  if (total.stocks.activeSells) toScreen(`Сумма по активным сделкам на продажу акций: ${total.stocks.activeSells.toFixed(2)} RUB`, 'w');
+  if (total.currencies.activeBuys) toScreen(`Сумма по активным сделкам на покупку валют: ${total.currencies.activeBuys.toFixed(2)} RUB`, 'w');
+  if (total.currencies.activeSells) toScreen(`Сумма по активным сделкам на продажу валют: ${total.currencies.activeSells.toFixed(2)} RUB`, 'w');
+}
+
 const showDeals = () => {
   return new Promise(async (resolve) => {
     const deals = await getAllDeals();
     if (deals) {
-      const total = {
-        stocks: {
-          activeBuys: 0,
-          activeSells: 0
-        },
-        currencies: {
-          activeBuys: 0,
-          activeSells: 0
-        }
-      }
       deals.forEach((deal, i) => {
-        const {is_executed, direction, type} = deal;
-        const {mes, sum} = getDealMesAndSum(i, deal);
-        if (!is_executed) {
-          if (direction === 'Buy' && type === 'stock') {
-            total.stocks.activeBuys = total.stocks.activeBuys + sum;
-          }
-          if (direction === 'Sell' && type === 'stock') {
-            total.stocks.activeSells = total.stocks.activeSells + sum;
-          }
-          if (direction === 'Buy' && type === 'currency') {
-            total.currencies.activeBuys = total.currencies.activeBuys + sum;
-          }
-          if (direction === 'Sell' && type === 'currency') {
-            total.currencies.activeSells = total.currencies.activeSells + sum;
-          }
-        }
+        const {is_executed} = deal;
+        const {mes} = getDealMesAndSum(i, deal);
         const level = is_executed ? 'w' : 's';
         toScreen(mes, level);
       })
-      if (total.stocks.activeBuys) toScreen(`Сумма по активным сделкам на покупку акций: ${total.stocks.activeBuys} RUB`, 'w');
-      if (total.stocks.activeSells) toScreen(`Сумма по активным сделкам на продажу акций: ${total.stocks.activeSells} RUB`, 'w');
-      if (total.currencies.activeBuys) toScreen(`Сумма по активным сделкам на покупку валют: ${total.currencies.activeBuys} RUB`, 'w');
-      if (total.currencies.activeSells) toScreen(`Сумма по активным сделкам на продажу валют: ${total.currencies.activeSells} RUB`, 'w');
+      showTotalsActive(deals);
     } else {
       toScreen(noDealsMes, 'w');
       resolve();
@@ -541,4 +550,4 @@ const ask = async () => {
   }
 }
 
-module.exports = {ask};
+module.exports = {ask, showTotalsActive};
