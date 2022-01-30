@@ -32,6 +32,14 @@ const debug = (any) => {
   }
 }
 
+const pause = (timeout = 1500) => {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve();
+    }, timeout)
+  })
+}
+
 // level: c - critical
 const handleError = (error, level) => {
   logify(error, 'error!', 'error');
@@ -41,5 +49,6 @@ const handleError = (error, level) => {
 module.exports = {
   debug,
   toScreen,
-  toConsole
+  toConsole,
+  pause
 }

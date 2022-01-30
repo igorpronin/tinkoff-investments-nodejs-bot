@@ -1,10 +1,59 @@
 require('dotenv').config();
-const {toTelegram} = require('./telegram');
+const {toTelegram, sendMessagesToAdminOneByOne} = require('./telegram');
 const {debug, toScreen} = require('./utils');
 const connection = require('./connection');
 const {getAllDeals, updateDealIsExecuted} = require('./db');
 const store = require('./store');
 const {logify} = require('./logger');
+const cron = require('node-cron');
+
+// отправка по понедельникам информации о сделках
+const mondayTask = cron.schedule('0 11 * * 1', () =>  {
+  sendDealsToTelegram().then();
+}, {
+  scheduled: false
+});
+
+const getDealMesAndSum = (i, deal) => {
+  const {id, ticker, direction, trigger_price, order_type, order_price, lots, lot, is_executed, currency} = deal;
+  const prefix = is_executed ? '[ИСПОЛНЕНА]' : '[АКТИВНА]  ';
+  let ordStr = `ордер: ${direction}, ${order_type}, лотов ${lots}`;
+  if (order_type === 'limit') {
+    ordStr += `, цена исполнения: ${order_price}`;
+  }
+  let dealSum = trigger_price * lots * lot;
+  if (currency !== 'RUB') {
+    const currencyPrice = store.currencies[currency].price;
+    dealSum = dealSum * currencyPrice;
+  }
+  const mes = `${prefix} ${i + 1}. ${id.slice(0, 9)}... | ${ticker} | цена активации: ${trigger_price} | ${ordStr} | сумма сделки: ${dealSum.toFixed(2)} RUB`;
+  return {mes, sum: dealSum}
+}
+
+const getFormattedDealsMessagesForTelegram = (deals) => {
+  const TG_MESSAGE_SYMBOLS_LIMIT = 2000;
+  let messages = [];
+  let message = '';
+  deals.forEach((deal, i) => {
+    let {mes: oneMoreMessage} = getDealMesAndSum(i, deal);
+    oneMoreMessage += '\n---\n';
+    if ((message.length + oneMoreMessage.length) > TG_MESSAGE_SYMBOLS_LIMIT) {
+      messages.push(message);
+      message = '';
+      message += oneMoreMessage;
+    } else {
+      message += oneMoreMessage;
+    }
+  })
+  messages.push(message);
+  return messages;
+}
+
+const sendDealsToTelegram = async () => {
+  const deals = await getAllDeals();
+  const messages = getFormattedDealsMessagesForTelegram(deals);
+  await sendMessagesToAdminOneByOne(messages);
+}
 
 const noDealsMes = 'Сделок нет. Добавьте сделки.';
 
@@ -377,6 +426,8 @@ const runMain = async () => {
       connection.orderbook({figi}, orderBookStreamCurrencyHandler);
     }
   }
+  sendDealsToTelegram().then();
+  mondayTask.start();
 }
 
-module.exports = {runMain, noDealsMes};
+module.exports = {runMain, noDealsMes, getDealMesAndSum};

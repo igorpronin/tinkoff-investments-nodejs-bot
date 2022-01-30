@@ -3,7 +3,7 @@ const inquirer = require('inquirer');
 const {debug, toScreen} = require('./utils');
 const store = require('./store');
 const {getAllDeals, insertDeal, deleteDeal, deleteExecutedDeals, setSettingVal, updateDealIsExecuted} = require('./db');
-const {noDealsMes} = require('./main');
+const {noDealsMes, getDealMesAndSum} = require('./main');
 const {setCurrentAccount, getCandlesLast7Days} = require('./api');
 
 const {availableCurrenciesList} = store;
@@ -19,22 +19,6 @@ const {availableCurrenciesList} = store;
 //   const orders = await getOrders(connection);
 //   await saveOrders(orders);
 // }
-
-const getDealMesAndSum = (i, deal) => {
-  const {id, ticker, direction, trigger_price, order_type, order_price, lots, lot, is_executed, currency} = deal;
-  const prefix = is_executed ? '[ИСПОЛНЕНА]' : '[АКТИВНА]  ';
-  let ordStr = `ордер: ${direction}, ${order_type}, лотов ${lots}`;
-  if (order_type === 'limit') {
-    ordStr += `, цена исполнения: ${order_price}`;
-  }
-  let dealSum = trigger_price * lots * lot;
-  if (currency !== 'RUB') {
-    const currencyPrice = store.currencies[currency].price;
-    dealSum = dealSum * currencyPrice;
-  }
-  const mes = `${prefix} ${i + 1}. ${id.slice(0, 9)}... | ${ticker} | цена активации: ${trigger_price} | ${ordStr} | сумма сделки: ${dealSum.toFixed(2)} RUB`;
-  return {mes, sum: dealSum}
-}
 
 const showTotalsActive = async () => {
   const deals = await getAllDeals();
@@ -550,4 +534,7 @@ const ask = async () => {
   }
 }
 
-module.exports = {ask, showTotalsActive};
+module.exports = {
+  ask,
+  showTotalsActive
+};

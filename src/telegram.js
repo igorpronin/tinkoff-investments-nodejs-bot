@@ -1,6 +1,6 @@
 require('dotenv').config();
 const axios = require('axios');
-const {debug, toScreen} = require('./utils');
+const {debug, toScreen, pause} = require('./utils');
 const API_KEY = process.env.TG_BOT_API_KEY;
 const URL = `https://api.telegram.org/bot${API_KEY}`;
 const root = require('app-root-path');
@@ -42,7 +42,15 @@ const toTelegram = async (mes) => {
   })
 }
 
+const sendMessagesToAdminOneByOne = async (messagesArray, interval = 2000) => {
+  for (let i = 0; i < messagesArray.length; i++) {
+    await toTelegram(messagesArray[i]);
+    await pause(interval);
+  }
+}
+
 module.exports = {
   sendMes,
-  toTelegram
+  toTelegram,
+  sendMessagesToAdminOneByOne
 }
