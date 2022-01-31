@@ -14,6 +14,12 @@ const mondayTask = cron.schedule('0 11 * * 1', () =>  {
   scheduled: false
 });
 
+const hourlyTask = cron.schedule('0 * * * *', () =>  {
+  sendDealsToTelegram().then();
+}, {
+  scheduled: false
+});
+
 const getDealMesAndSum = (i, deal) => {
   const {id, ticker, direction, trigger_price, order_type, order_price, lots, lot, is_executed, currency} = deal;
   const prefix = is_executed ? '[ИСПОЛНЕНА]' : '[АКТИВНА]  ';
@@ -428,6 +434,7 @@ const runMain = async () => {
   }
   sendDealsToTelegram().then();
   mondayTask.start();
+  hourlyTask.start();
 }
 
 module.exports = {runMain, noDealsMes, getDealMesAndSum};
