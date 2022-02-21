@@ -1,10 +1,11 @@
 require('dotenv').config();
 const inquirer = require('inquirer');
-const {debug, toScreen} = require('./utils');
-const store = require('./store');
-const {getAllDeals, insertDeal, deleteDeal, deleteExecutedDeals, setSettingVal, updateDealIsExecuted} = require('./db');
-const {noDealsMes, getDealMesAndSum} = require('./main');
-const {setCurrentAccount, getCandlesLast7Days} = require('./api');
+const {debug, toScreen} = require('../utils');
+const store = require('../store');
+const {getAllDeals, insertDeal, deleteDeal, deleteExecutedDeals, setSettingVal, updateDealIsExecuted} = require('../db');
+const {noDealsMes, noNonActiveDealsMes, getDealMesAndSum} = require('../main');
+const {getCandlesLast7Days} = require('../api');
+const {askTicker, askDirection, askTriggerPrice, askOrderType, askOrderPrice, askLots} = require('./deal_params_prompts');
 
 const {availableCurrenciesList} = store;
 
@@ -22,6 +23,10 @@ const {availableCurrenciesList} = store;
 
 const showTotalsActive = async () => {
   const deals = await getAllDeals();
+  if (!deals) {
+    toScreen(`Активных единичных сделок на покупку акций нет`, 'w');
+    return;
+  }
   const total = {
     stocks: {
       activeBuys: 0,
@@ -154,7 +159,7 @@ const resetOne = async () => {
       }
     }
   } else {
-    toScreen(noDealsMes, 'w');
+    toScreen(noNonActiveDealsMes, 'w');
   }
 }
 
@@ -162,110 +167,6 @@ const deleteExecuted = async () => {
   const result = await deleteExecutedDeals();
   if (result) {toScreen('Исполненные сделки удалены.', 's');}
   else {toScreen('Ошибка при удалении сделок.', 'e');}
-}
-
-const askTicker = async () => {
-  const q1 = [
-    {
-      type: 'input',
-      name: 'ticker',
-      message: 'Тикер акции или расписки, "USDRUBTOM", "EURRUBTOM" для сделок с USD, EUR'
-    }
-  ]
-  let {ticker} = await inquirer.prompt(q1);
-  ticker = ticker.toUpperCase();
-  if (!(store.tickersList.includes(ticker) || availableCurrenciesList.includes(ticker))) {
-    toScreen(`Тикера ${ticker} нет в списке доступных для торговли. Укажите другой.`, 'w');
-    ticker = await askTicker();
-  }
-  return ticker;
-}
-const askDirection = async () => {
-  const q1 = [
-    {
-      type: 'list',
-      name: 'direction',
-      message: 'Направление',
-      choices: [
-        {
-          value: 'Buy',
-          name: 'Купить'
-        },
-        {
-          value: 'Sell',
-          name: 'Продать'
-        }
-      ]
-    }
-  ]
-  let {direction} = await inquirer.prompt(q1);
-  return direction;
-}
-const askTriggerPrice = async () => {
-  const q1 = [
-    {
-      type: 'number',
-      name: 'trigger_price',
-      message: 'Цена актива, при достижении которой создастся ордер',
-    }
-  ]
-  let {trigger_price} = await inquirer.prompt(q1);
-  if (Number(trigger_price) > 0) {
-    return trigger_price;
-  }
-  toScreen(`Укажите положительное число.`, 'w');
-  return await askTriggerPrice();
-}
-const askOrderType = async () => {
-  const q1 = [
-    {
-      type: 'list',
-      name: 'order_type',
-      message: 'Тип ордера',
-      choices: [
-        {
-          value: 'limit',
-          name: 'Лимитный'
-        },
-        {
-          value: 'market',
-          name: 'Рыночный'
-        }
-      ]
-    }
-  ]
-  let {order_type} = await inquirer.prompt(q1);
-  return order_type;
-}
-const askOrderPrice = async () => {
-  const q1 = [
-    {
-      type: 'number',
-      name: 'order_price',
-      message: 'Цена ордера',
-    }
-  ]
-  let {order_price} = await inquirer.prompt(q1);
-  if (Number(order_price) > 0) {
-    return order_price;
-  }
-  toScreen(`Укажите положительное число.`, 'w');
-  return await askOrderPrice();
-}
-const askLots = async () => {
-  const q1 = [
-    {
-      type: 'number',
-      name: 'lots',
-      message: 'Количество лотов',
-    }
-  ]
-  let {lots} = await inquirer.prompt(q1);
-  if (Number(lots) > 0 && Number.isInteger(lots)) {
-    return lots;
-  }
-  toScreen(`Укажите положительное целое число.`, 'w');
-  return await askLots();
 }
 
 const addStockDeal = async (params) => {
@@ -369,30 +270,6 @@ const handleAddDeal = async () => {
   return null;
 }
 
-const setAcc = async () => {
-  toScreen('Установка счета для торговли...', 'w');
-  const choices = [];
-  const q1 = [
-    {
-      type: 'list',
-      name: 'accID',
-      message: 'Аккаунт',
-      choices
-    }
-  ]
-  store.accounts.forEach(acc => {
-    choices.push({
-      value: acc.brokerAccountId,
-      name: `${acc.brokerAccountType}, ${acc.brokerAccountId}`
-    })
-  })
-  let {accID} = await inquirer.prompt(q1);
-  setCurrentAccount(accID);
-  store.activeAcc = accID;
-  await setSettingVal('active_acc', accID);
-  toScreen(`Активный счет ${accID} установлен.`, 's');
-}
-
 const setLimits = async () => {
   toScreen('Установка лимитов на покупку/продажу, в рублях, за одну сессию...', 'w');
   const q1 = [
@@ -446,31 +323,27 @@ const handleAction = async (answer) => {
   switch (answer) {
     case 'deals':
       await showDeals();
-      await ask();
+      await askConfigDeals();
       break;
     case 'add_deal':
       await handleAddDeal();
-      await ask();
+      await askConfigDeals();
       break;
     case 'delete_deal':
       await deleteOne();
-      await ask();
+      await askConfigDeals();
       break;
     case 'reset_deal':
       await resetOne();
-      await ask();
+      await askConfigDeals();
       break;
     case 'delete_executed_deals':
       await deleteExecuted();
-      await ask();
-      break;
-    case 'set_acc':
-      await setAcc();
-      await ask();
+      await askConfigDeals();
       break;
     case 'set_limits':
       await setLimits();
-      await ask();
+      await askConfigDeals();
       break;
     case 'close':
       toScreen('Завершено!');
@@ -479,38 +352,34 @@ const handleAction = async (answer) => {
   }
 }
 
-const ask = async () => {
+const askConfigDeals = async () => {
   const actions = {
     type: 'list',
     name: 'action',
     message: 'Что сделать?',
     choices: [
       {
-        name: 'Показать сделки',
+        name: 'Показать единичные сделки',
         value: 'deals'
       },
       {
-        name: 'Добавить сделку',
+        name: 'Добавить единичную сделку',
         value: 'add_deal'
       },
       {
-        name: 'Удалить сделку',
+        name: 'Удалить единичную сделку',
         value: 'delete_deal'
       },
       {
-        name: 'Активировать сделку',
+        name: 'Активировать единичную сделку',
         value: 'reset_deal'
       },
       {
-        name: 'Удалить исполненные сделки',
+        name: 'Удалить исполненные единичные сделки',
         value: 'delete_executed_deals'
       },
       {
-        name: 'Выбрать счет для торговли',
-        value: 'set_acc'
-      },
-      {
-        name: 'Установить ограничения сумм сделок',
+        name: 'Установить ограничения сумм единичных сделок',
         value: 'set_limits'
       },
       {
@@ -535,6 +404,6 @@ const ask = async () => {
 }
 
 module.exports = {
-  ask,
+  askConfigDeals,
   showTotalsActive
 };

@@ -2,12 +2,21 @@ const store = {
   stocksRaw: null,
   currenciesRaw: null,
   availableCurrenciesList: ['USDRUBTOM', 'EURRUBTOM'],
+
+  // Объект для хранения данных по акциям, по которым есть сделки
+  // ключи по тикеру
   activeStocksByTicker: {},
+
+  // Объект для хранения данных по акциям, по которым есть сделки
+  // ключи по FIGI, объект содержит ссылки на акции, добавленные ранее в activeStocksByTicker, НЕ клон
   activeStocksByFigi: {},
+
   tickersList: null,
   accounts: null,
-  activeAcc: null,
+  activeAcc: null, // текущий аккаунт для работы
   portfolio: {},
+  hasPendingPairDeals: false, // если есть сделки в статусе 'pending', новые сделки не открывать!
+  pendingOrdersByPairDeals: new Set(),
   sumOrdersBuyActivatedRUB: 0,
   sumOrdersSellActivatedRUB: 0,
   ordersActivateLimit: {

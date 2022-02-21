@@ -5,6 +5,7 @@ const {version, name} = require('./package.json');
 const moment = require('moment');
 const getSize = require('get-folder-size');
 const root = require('app-root-path');
+const {getStocks, getCurrencies, getAccounts, getPortfolioByAccount, getPortfolioCurrenciesByAccount} = require('./src/get_data_funcs');
 
 const getLogsSize = () => {
   return new Promise((resolve, reject) => {
@@ -19,7 +20,7 @@ const startTime = moment().format('YYYY-MM-DD h:mm:ss a');
 toScreen(`${name}, version: ${version}, start time: ${startTime}`, 's');
 
 const inquirer = require('inquirer');
-const {ask: configure, showTotalsActive} = require('./src/configure');
+const {askConfigDeals, askConfigPairDeals, showTotalsActive, askConfigCommon} = require('./src/configure');
 const {runMain} = require('./src/main');
 const {
   getAndSaveStocks, getAndSaveAccounts, getAndSavePortfolio, getInitialCurrencyPrices,
@@ -42,8 +43,14 @@ process.argv.forEach(item => {
 
 const handleAction = async (answer) => {
   switch (answer) {
-    case 'run_config':
-      await configure();
+    case 'run_config_common':
+      await askConfigCommon();
+      break;
+    case 'run_config_deals':
+      await askConfigDeals();
+      break;
+    case 'run_config_pair_deals':
+      await askConfigPairDeals();
       break;
     case 'run_main':
       await runMain();
@@ -62,8 +69,16 @@ const ask = async () => {
     message: 'Что сделать?',
     choices: [
       {
-        name: 'Настроить',
-        value: 'run_config'
+        name: 'Настроить общие параметры',
+        value: 'run_config_common'
+      },
+      {
+        name: 'Настроить единичные сделки',
+        value: 'run_config_deals'
+      },
+      {
+        name: 'Настроить парные сделки',
+        value: 'run_config_pair_deals'
       },
       {
         name: 'Запустить скрипт',
@@ -88,40 +103,7 @@ const ask = async () => {
   }
 }
 
-const getStocks = async () => {
-  toScreen('Обновляется список доступных акций...');
-  store.stocksRaw = await getAndSaveStocks();
-  const {instruments} = store.stocksRaw;
-  store.tickersList = instruments.map(item => item.ticker);
-  toScreen('Список доступных акций обновлен.');
-}
 
-const getCurrencies = async () => {
-  toScreen('Обновляется список доступных валютных инструментов...');
-  store.currenciesRaw = await getAndSaveCurrencies();
-  toScreen('Список доступных валютных инструментов обновлен.');
-}
-
-const getAccounts = async () => {
-  toScreen('Запрашивается список счетов...');
-  const {accounts} = await getAndSaveAccounts();
-  store.accounts = accounts;
-  toScreen('Список счетов получен.');
-}
-
-const getPortfolioByAccount = async (accID) => {
-  toScreen(`Запрашивается портфель по счету ${accID}...`);
-  const {positions} = await getAndSavePortfolio(accID);
-  store.portfolio[accID] = positions;
-  toScreen(`Портфель получен по счету ${accID}.`);
-}
-
-const getPortfolioCurrenciesByAccount = async (accID) => {
-  toScreen(`Запрашиваются валюты по счету ${accID}...`);
-  const {currencies} = await getAndSavePortfolioCurrencies(accID);
-  store.portfolioCurrencies[accID] = currencies;
-  toScreen(`Валюты получены по счету ${accID}.`);
-}
 
 const fillInitialCurrencyPrices = async () => {
   toScreen(`Запрашиваются цены валют...`);

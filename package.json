@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node --trace-warnings index.js",
+    "dev": "nodemon index.js",
     "start:conf": "node index.js -F=0",
     "start:force": "node index.js -F=1",
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -22,6 +23,7 @@
     "dotenv": "^10.0.0",
     "get-folder-size": "^2.0.1",
     "inquirer": "^8.2.0",
+    "lodash": "^4.17.21",
     "moment": "^2.29.1",
     "node-cron": "^3.0.0",
     "sqlite3": "^5.0.2",

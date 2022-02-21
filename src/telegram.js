@@ -32,8 +32,9 @@ const toTelegram = async (mes) => {
   if (!process.env.TG_ADMIN_USER_ID) return;
   let message = `${name}\n`;
   if (process.env.ENV_ID) {
-    message += `Env: ${process.env.ENV_ID}\n\n`;
+    message += `Env: ${process.env.ENV_ID}\n`;
   }
+  message += `\n`;
   message += mes;
   return await sendMes({
     userID: process.env.TG_ADMIN_USER_ID,
